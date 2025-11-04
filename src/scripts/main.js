@@ -17,19 +17,13 @@ class CharacterGeneratorApp {
   }
 
   async init() {
-    // Debug localStorage
-    console.log("Current localStorage:", localStorage);
     const savedConfig = localStorage.getItem("charGeneratorConfig");
-    if (savedConfig) {
-      console.log("Found saved config:", savedConfig);
-      // Clear old config that might have wrong structure
-      if (
-        savedConfig.includes('"api":{"baseUrl"') ||
-        savedConfig.includes('"textModel"')
-      ) {
-        console.log("Clearing old config format");
-        localStorage.removeItem("charGeneratorConfig");
-      }
+    if (
+      savedConfig &&
+      (savedConfig.includes('"api":{"baseUrl"') ||
+        savedConfig.includes('"textModel"'))
+    ) {
+      localStorage.removeItem("charGeneratorConfig");
     }
 
     await this.config.waitForConfig();
@@ -203,7 +197,7 @@ class CharacterGeneratorApp {
 
   handleClearConfig() {
     if (confirm("Are you sure you want to clear all saved API settings?")) {
-      localStorage.removeItem("charGeneratorConfig");
+      this.config.clearStoredConfig();
       this.showNotification(
         "Configuration cleared! Reloading page...",
         "success",

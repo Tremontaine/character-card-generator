@@ -1,4 +1,10 @@
 // Configuration file for SillyTavern Character Generator
+const LOCAL_STORAGE_KEY = "charGeneratorConfig";
+const SESSION_STORAGE_KEYS = {
+  textApiKey: "charGeneratorConfig:textApiKey",
+  imageApiKey: "charGeneratorConfig:imageApiKey",
+};
+
 class Config {
   constructor() {
     this.config = this.getDefaultConfig();
@@ -51,28 +57,24 @@ class Config {
 
   async loadConfig() {
     // Load from localStorage
-    const savedConfig = localStorage.getItem("charGeneratorConfig");
+    const savedConfig = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (savedConfig) {
       try {
         const saved = JSON.parse(savedConfig);
+        this.stripPersistedApiKeys(saved);
         this.config = this.deepMerge(this.config, saved);
-        this.log("Loaded config from localStorage:", saved);
+        this.logRedacted("Loaded config from storage:", saved);
       } catch (error) {
         console.warn("Failed to load saved config:", error);
       }
     }
 
+    this.restoreSensitiveValuesFromSession();
+
     // Load debug mode setting
     this.debugMode = this.config.app.debugMode || false;
 
-    this.log("Final config:", this.config);
-    this.log(
-      "Text API Key (first 10 chars):",
-      this.config.api.text.apiKey
-        ? `${this.config.api.text.apiKey.substring(0, 10)}...`
-        : "null",
-    );
-    this.log("Text API Key length:", this.config.api.text.apiKey?.length || 0);
+    this.logRedacted("Final config:", this.config);
   }
 
   loadFromForm() {
@@ -118,7 +120,9 @@ class Config {
   }
 
   saveConfig() {
-    localStorage.setItem("charGeneratorConfig", JSON.stringify(this.config));
+    const persistableConfig = this.getSanitizedConfigForStorage();
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(persistableConfig));
+    this.persistSensitiveValuesToSession();
   }
 
   saveToForm() {
@@ -189,6 +193,117 @@ class Config {
     }
 
     return errors;
+  }
+
+  getSanitizedConfigForStorage() {
+    const configCopy = JSON.parse(JSON.stringify(this.config));
+    if (configCopy.api?.text) {
+      configCopy.api.text.apiKey = "";
+    }
+    if (configCopy.api?.image) {
+      configCopy.api.image.apiKey = "";
+    }
+    return configCopy;
+  }
+
+  persistSensitiveValuesToSession() {
+    this.persistSessionValue(
+      SESSION_STORAGE_KEYS.textApiKey,
+      this.config.api.text.apiKey,
+    );
+    this.persistSessionValue(
+      SESSION_STORAGE_KEYS.imageApiKey,
+      this.config.api.image.apiKey,
+    );
+  }
+
+  persistSessionValue(key, value) {
+    try {
+      if (value) {
+        sessionStorage.setItem(key, value);
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.warn("Unable to persist sensitive config to sessionStorage:", error);
+    }
+  }
+
+  restoreSensitiveValuesFromSession() {
+    const textKey = this.getSessionValue(SESSION_STORAGE_KEYS.textApiKey);
+    if (textKey !== null) {
+      this.config.api.text.apiKey = textKey;
+    }
+    const imageKey = this.getSessionValue(SESSION_STORAGE_KEYS.imageApiKey);
+    if (imageKey !== null) {
+      this.config.api.image.apiKey = imageKey;
+    }
+  }
+
+  getSessionValue(key) {
+    try {
+      return sessionStorage.getItem(key);
+    } catch (error) {
+      console.warn("Unable to read sensitive config from sessionStorage:", error);
+      return null;
+    }
+  }
+
+  stripPersistedApiKeys(savedConfig) {
+    if (!this.isObject(savedConfig)) {
+      return;
+    }
+
+    if (savedConfig?.api?.text?.apiKey) {
+      console.warn(
+        "Discarded persisted text API key. Keys are now stored only for the current session.",
+      );
+      savedConfig.api.text.apiKey = "";
+    }
+
+    if (savedConfig?.api?.image?.apiKey) {
+      console.warn(
+        "Discarded persisted image API key. Keys are now stored only for the current session.",
+      );
+      savedConfig.api.image.apiKey = "";
+    }
+  }
+
+  clearStoredConfig() {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    Object.values(SESSION_STORAGE_KEYS).forEach((key) => {
+      try {
+        sessionStorage.removeItem(key);
+      } catch (error) {
+        console.warn("Unable to clear sessionStorage for sensitive config:", error);
+      }
+    });
+  }
+
+  redactSensitiveData(data) {
+    if (Array.isArray(data)) {
+      return data.map((item) => this.redactSensitiveData(item));
+    }
+
+    if (!this.isObject(data)) {
+      return data;
+    }
+
+    const redacted = {};
+    Object.keys(data).forEach((key) => {
+      if (key.toLowerCase().includes("apikey")) {
+        redacted[key] = data[key] ? "[REDACTED]" : "";
+      } else {
+        redacted[key] = this.redactSensitiveData(data[key]);
+      }
+    });
+    return redacted;
+  }
+
+  logRedacted(message, data) {
+    if (this.getDebugMode()) {
+      console.log(message, this.redactSensitiveData(data));
+    }
   }
 }
 

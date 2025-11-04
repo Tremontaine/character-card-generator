@@ -100,8 +100,7 @@ class PNGEncoder {
     newData.push(...data.slice(0, this.PNG_SIGNATURE.length));
 
     while (offset < data.length - 12) {
-      // Safety check to prevent infinite loops
-      if (length < 0 || length > data.length - offset - 12) {
+      if (offset + 8 > data.length) {
         break;
       }
 
@@ -111,6 +110,12 @@ class PNGEncoder {
         (data[offset + 1] << 16) |
         (data[offset + 2] << 8) |
         data[offset + 3];
+
+      // Safety check to prevent infinite loops and malformed chunks
+      if (length < 0 || offset + 12 + length > data.length) {
+        console.warn("Encountered malformed PNG chunk while cleaning metadata.");
+        break;
+      }
 
       // Read chunk type
       const type = String.fromCharCode(

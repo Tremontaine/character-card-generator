@@ -48,201 +48,6 @@
                         />
                     </div>
 
-                    <!-- API Settings Collapsible -->
-                    <details
-                        class="api-settings-panel"
-                        style="margin-bottom: 1rem"
-                    >
-                        <summary
-                            style="
-                                cursor: pointer;
-                                padding: 0.75rem;
-                                background: var(--bg-secondary);
-                                border-radius: var(--radius);
-                                font-weight: 600;
-                                user-select: none;
-                            "
-                        >
-                            ⚙️ API Settings
-                        </summary>
-                        <div
-                            style="
-                                padding: 1rem;
-                                background: var(--bg-secondary);
-                                border-radius: var(--radius);
-                                margin-top: 0.5rem;
-                            "
-                        >
-                            <div class="form-group">
-                                <label for="text-api-base" class="label"
-                                    >Text API Base URL</label
-                                >
-                                <input
-                                    type="text"
-                                    id="text-api-base"
-                                    class="input"
-                                    placeholder="Your API Base URL"
-                                    required
-                                />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="text-api-key" class="label"
-                                    >Text API Key</label
-                                >
-                                <input
-                                    type="password"
-                                    id="text-api-key"
-                                    class="input"
-                                    placeholder="Your API key (required)"
-                                    required
-                                />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="text-model" class="label"
-                                    >Text Model</label
-                                >
-                                <input
-                                    type="text"
-                                    id="text-model"
-                                    class="input"
-                                    placeholder="e.g., glm-4.6"
-                                    required
-                                />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="image-api-base" class="label"
-                                    >Image API Base URL (optional)</label
-                                >
-                                <input
-                                    type="text"
-                                    id="image-api-base"
-                                    class="input"
-                                    placeholder="Your Image API Base URL (optional)"
-                                />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="image-api-key" class="label"
-                                    >Image API Key (optional)</label
-                                >
-                                <input
-                                    type="password"
-                                    id="image-api-key"
-                                    class="input"
-                                    placeholder="Your Image API key (optional)"
-                                />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="image-model" class="label"
-                                    >Image Model (optional)</label
-                                >
-                                <input
-                                    type="text"
-                                    id="image-model"
-                                    class="input"
-                                    placeholder="e.g., bytedance/seedream-4 (optional)"
-                                />
-                            </div>
-
-                            <div class="form-group">
-                                <label for="image-size" class="label"
-                                    >Image Size (optional)</label
-                                >
-                                <input
-                                    type="text"
-                                    id="image-size"
-                                    class="input"
-                                    placeholder="e.g., 1024x1024, 512x512 (optional)"
-                                />
-                            </div>
-
-                            <!-- API Key Persistence Toggle -->
-                            <div class="form-group">
-                                <label class="label">API Key Persistence</label>
-                                <div
-                                    style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 0.5rem;
-                                    "
-                                >
-                                    <label class="switch">
-                                        <input
-                                            type="checkbox"
-                                            id="persist-api-keys"
-                                        />
-                                        <span class="slider"></span>
-                                    </label>
-                                    <span
-                                        style="
-                                            font-size: 0.875rem;
-                                            color: var(--text-secondary);
-                                        "
-                                    >
-                                        Save API keys to browser storage
-                                    </span>
-                                </div>
-                                <p
-                                    style="
-                                        font-size: 0.75rem;
-                                        color: #9ca3af;
-                                        margin-top: 0.5rem;
-                                    "
-                                >
-                                    💡 When enabled, API keys are saved locally
-                                    and persist after browser restart. When
-                                    disabled, keys are cleared when you close
-                                    the tab or restart the browser.
-                                </p>
-                            </div>
-
-                            <!-- Image Generation Toggle -->
-                            <div class="form-group">
-                                <label class="label">Image Generation</label>
-                                <div
-                                    style="
-                                        display: flex;
-                                        align-items: center;
-                                        gap: 0.5rem;
-                                    "
-                                >
-                                    <label class="switch">
-                                        <input
-                                            type="checkbox"
-                                            id="enable-image-generation"
-                                            checked
-                                        />
-                                        <span class="slider"></span>
-                                    </label>
-                                    <span
-                                        style="
-                                            font-size: 0.875rem;
-                                            color: var(--text-secondary);
-                                        "
-                                    >
-                                        Generate images automatically
-                                    </span>
-                                </div>
-                                <p
-                                    style="
-                                        font-size: 0.75rem;
-                                        color: #9ca3af;
-                                        margin-top: 0.5rem;
-                                    "
-                                >
-                                    💡 When disabled, images won't be generated
-                                    automatically (saves API costs). You can
-                                    still upload your own images and regenerate
-                                    prompts.
-                                </p>
-                            </div>
-                        </div>
-                    </details>
-
                     <div class="generation-buttons">
                         <button
                             id="generate-btn"
@@ -260,16 +65,6 @@
                             style="display: none"
                         >
                             ⏹ Stop
-                        </button>
-                    </div>
-
-                    <div class="form-actions">
-                        <button
-                            id="clear-config-btn"
-                            class="btn-outline"
-                            style="margin-top: 1rem"
-                        >
-                            Clear Saved Configuration
                         </button>
                     </div>
                 </section>
@@ -693,17 +488,28 @@
             </main>
 
             <footer class="footer">
-                <div class="api-status" id="api-status">
-                    <span class="status-indicator status-offline"></span>
-                    <span class="status-text">API Status: Checking...</span>
+                <div class="footer-left">
+                    <div class="api-status" id="api-status">
+                        <span class="status-indicator status-offline"></span>
+                        <span class="status-text">API Status: Checking...</span>
+                    </div>
                 </div>
-                <div class="footer-actions">
+                <div class="footer-center">
                     <button
                         id="test-connection-btn"
                         class="btn-outline"
                         style="font-size: 0.85rem"
                     >
                         Test Connection
+                    </button>
+                </div>
+                <div class="footer-right">
+                    <button
+                        id="api-settings-btn"
+                        class="btn-outline"
+                        style="font-size: 0.85rem"
+                    >
+                        ⚙️ API Settings
                     </button>
                 </div>
             </footer>
@@ -714,6 +520,185 @@
         <script src="src/scripts/character-generator.js?v=20250120"></script>
         <script src="src/scripts/image-generator.js?v=20250120"></script>
         <script src="src/scripts/png-encoder.js?v=20250120"></script>
+        <!-- API Settings Modal -->
+        <div id="api-settings-modal" class="modal-overlay">
+            <div class="api-settings-modal">
+                <div class="modal-header">
+                    <h2 class="modal-title">⚙️ API Settings</h2>
+                    <button id="modal-close-btn" class="modal-close">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="text-api-base" class="label"
+                            >Text API Base URL</label
+                        >
+                        <input
+                            type="text"
+                            id="text-api-base"
+                            class="input"
+                            placeholder="Your API Base URL"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="text-api-key" class="label"
+                            >Text API Key</label
+                        >
+                        <input
+                            type="password"
+                            id="text-api-key"
+                            class="input"
+                            placeholder="Your API key (required)"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="text-model" class="label">Text Model</label>
+                        <input
+                            type="text"
+                            id="text-model"
+                            class="input"
+                            placeholder="e.g., glm-4.6"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-api-base" class="label"
+                            >Image API Base URL (optional)</label
+                        >
+                        <input
+                            type="text"
+                            id="image-api-base"
+                            class="input"
+                            placeholder="Your Image API Base URL (optional)"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-api-key" class="label"
+                            >Image API Key (optional)</label
+                        >
+                        <input
+                            type="password"
+                            id="image-api-key"
+                            class="input"
+                            placeholder="Your Image API key (optional)"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-model" class="label"
+                            >Image Model (optional)</label
+                        >
+                        <input
+                            type="text"
+                            id="image-model"
+                            class="input"
+                            placeholder="e.g., bytedance/seedream-4 (optional)"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="image-size" class="label"
+                            >Image Size (optional)</label
+                        >
+                        <input
+                            type="text"
+                            id="image-size"
+                            class="input"
+                            placeholder="e.g., 1024x1024, 512x512 (optional)"
+                        />
+                    </div>
+
+                    <!-- API Key Persistence Toggle -->
+                    <div class="form-group">
+                        <label class="label">API Key Persistence</label>
+                        <div
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 0.5rem;
+                            "
+                        >
+                            <label class="switch">
+                                <input type="checkbox" id="persist-api-keys" />
+                                <span class="slider"></span>
+                            </label>
+                            <span
+                                style="
+                                    font-size: 0.875rem;
+                                    color: var(--text-secondary);
+                                "
+                            >
+                                Save API keys to browser storage
+                            </span>
+                        </div>
+                        <p
+                            style="
+                                font-size: 0.75rem;
+                                color: #9ca3af;
+                                margin-top: 0.5rem;
+                            "
+                        >
+                            💡 When enabled, API keys are saved locally and
+                            persist after browser restart. When disabled, keys
+                            are cleared when you close the tab or restart the
+                            browser.
+                        </p>
+                    </div>
+
+                    <!-- Image Generation Toggle -->
+                    <div class="form-group">
+                        <label class="label">Image Generation</label>
+                        <div
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 0.5rem;
+                            "
+                        >
+                            <label class="switch">
+                                <input
+                                    type="checkbox"
+                                    id="enable-image-generation"
+                                    checked
+                                />
+                                <span class="slider"></span>
+                            </label>
+                            <span
+                                style="
+                                    font-size: 0.875rem;
+                                    color: var(--text-secondary);
+                                "
+                            >
+                                Generate images automatically
+                            </span>
+                        </div>
+                        <p
+                            style="
+                                font-size: 0.75rem;
+                                color: #9ca3af;
+                                margin-top: 0.5rem;
+                            "
+                        >
+                            💡 When disabled, images won't be generated
+                            automatically (saves API costs). You can still
+                            upload your own images and regenerate prompts.
+                        </p>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 2rem">
+                        <button id="clear-config-btn" class="btn-outline">
+                            Clear Saved Configuration
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script src="src/scripts/main.js?v=20250120"></script>
     </body>
 </html>

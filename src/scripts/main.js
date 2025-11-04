@@ -198,6 +198,40 @@ class CharacterGeneratorApp {
         );
       });
     }
+
+    // API Settings Modal functionality
+    const apiSettingsBtn = document.getElementById("api-settings-btn");
+    const modalOverlay = document.getElementById("api-settings-modal");
+    const modalCloseBtn = document.getElementById("modal-close-btn");
+
+    // Open modal
+    apiSettingsBtn.addEventListener("click", () => {
+      modalOverlay.classList.add("show");
+      document.body.style.overflow = "hidden"; // Prevent background scrolling
+    });
+
+    // Close modal function
+    const closeModal = () => {
+      modalOverlay.classList.remove("show");
+      document.body.style.overflow = ""; // Restore scrolling
+    };
+
+    // Close modal with close button
+    modalCloseBtn.addEventListener("click", closeModal);
+
+    // Close modal with escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modalOverlay.classList.contains("show")) {
+        closeModal();
+      }
+    });
+
+    // Close modal when clicking outside the modal content
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) {
+        closeModal();
+      }
+    });
   }
 
   async checkAPIStatus() {

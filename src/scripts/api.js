@@ -9,9 +9,8 @@ class APIHandler {
 
   async makeRequest(endpoint, data, isImageRequest = false, stream = false) {
     // Use proxy server to bypass browser API restrictions
-    // Detect if we're running locally or in Docker
-    const isLocalDev = window.location.port === "2427";
-    const baseUrl = isLocalDev ? "http://localhost:2426" : "";
+    // Both Nginx (prod/docker) and http-server (dev) are configured to proxy /api to the backend
+    const baseUrl = "";
     const proxyEndpoint = isImageRequest
       ? "/api/image/generations"
       : "/api/text/chat/completions";
@@ -193,8 +192,19 @@ class APIHandler {
     }
   }
 
-  async generateCharacter(prompt, characterName, onStream = null, pov = "first", lorebook = null) {
-    const characterPrompt = this.buildCharacterPrompt(prompt, characterName, pov, lorebook);
+  async generateCharacter(
+    prompt,
+    characterName,
+    onStream = null,
+    pov = "first",
+    lorebook = null,
+  ) {
+    const characterPrompt = this.buildCharacterPrompt(
+      prompt,
+      characterName,
+      pov,
+      lorebook,
+    );
     const model = this.config.get("api.text.model") || "glm-4-6"; // Fallback to your specified model
 
     this.config.log("Using text model:", model);
@@ -298,7 +308,7 @@ class APIHandler {
       console.error("Image prompt type:", typeof imagePrompt);
       throw new Error(
         "Image prompt is empty or invalid. Cannot generate image without a prompt. " +
-        "This usually means the text API failed to generate a prompt description.",
+          "This usually means the text API failed to generate a prompt description.",
       );
     }
 
@@ -420,7 +430,7 @@ class APIHandler {
     }
 
     // Handle streaming response - collect all content
-    const generatedPrompt = await this.handleStreamResponse(response, () => { });
+    const generatedPrompt = await this.handleStreamResponse(response, () => {});
 
     if (!generatedPrompt || generatedPrompt.trim().length === 0) {
       console.error("Text API returned empty prompt");
@@ -474,9 +484,12 @@ Shortened prompt (one paragraph):`,
       const response = await this.makeRequest(endpoint, data, false, true);
 
       // console.log(`🔍 DEBUG: Got response, processing stream...`);
-      const shortenedPrompt = await this.handleStreamResponse(response, (chunk, full) => {
-        // console.log(`🔍 DEBUG: Stream chunk received, length: ${chunk.length}, total so far: ${full.length}`);
-      });
+      const shortenedPrompt = await this.handleStreamResponse(
+        response,
+        (chunk, full) => {
+          // console.log(`🔍 DEBUG: Stream chunk received, length: ${chunk.length}, total so far: ${full.length}`);
+        },
+      );
 
       // console.log(`🔍 DEBUG: Stream complete, raw shortened prompt: "${shortenedPrompt}"`);
       const finalPrompt = shortenedPrompt.trim();
@@ -484,7 +497,9 @@ Shortened prompt (one paragraph):`,
 
       // Check if AI returned empty content - fall back to mechanical truncation
       if (!finalPrompt || finalPrompt.length === 0) {
-        console.warn("⚠️ AI returned empty shortened prompt, using fallback truncation");
+        console.warn(
+          "⚠️ AI returned empty shortened prompt, using fallback truncation",
+        );
         const truncated = prompt.substring(0, MAX_LENGTH - 3) + "...";
         console.log(`🔧 Fallback truncation to ${truncated.length} characters`);
         return truncated;
@@ -492,13 +507,18 @@ Shortened prompt (one paragraph):`,
 
       // Final safety check - if still too long, do mechanical truncation
       if (finalPrompt.length > MAX_LENGTH) {
-        console.warn("⚠️ AI shortened prompt still too long, applying final truncation");
+        console.warn(
+          "⚠️ AI shortened prompt still too long, applying final truncation",
+        );
         return finalPrompt.substring(0, MAX_LENGTH - 3) + "...";
       }
 
       return finalPrompt;
     } catch (error) {
-      console.error("❌ AI shortening failed, falling back to mechanical truncation:", error);
+      console.error(
+        "❌ AI shortening failed, falling back to mechanical truncation:",
+        error,
+      );
 
       // Fallback to simple truncation
       const truncated = prompt.substring(0, MAX_LENGTH - 3) + "...";
@@ -674,13 +694,15 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
     // console.log("BuildCharacterPrompt - Lorebook received:", lorebook); // DEBUG LOG
 
     if (lorebook && lorebook.entries) {
-      const entries = Object.values(lorebook.entries).filter(e => e.enabled !== false);
+      const entries = Object.values(lorebook.entries).filter(
+        (e) => e.enabled !== false,
+      );
       // console.log("BuildCharacterPrompt - Enabled entries:", entries); // DEBUG LOG
 
       if (entries.length > 0) {
         lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe.\n\n`;
 
-        entries.forEach(entry => {
+        entries.forEach((entry) => {
           lorebookContent += `**Keys:** ${entry.key.join(", ")}\n`;
           lorebookContent += `**Content:**\n${entry.content}\n\n---\n\n`;
         });

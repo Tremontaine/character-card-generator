@@ -6,9 +6,9 @@
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run frontend\"",
     "server": "cd proxy && npm install && npm start",
-    "frontend": "npx http-server . -p 2427 -c-1",
+    "frontend": "npx http-server . -p 2427 -c-1 --proxy http://localhost:2426",
     "dev": "concurrently \"npm run server\" \"npm run dev-frontend\"",
-    "dev-frontend": "npx http-server . -p 2427 -c-1 -o",
+    "dev-frontend": "npx http-server . -p 2427 -c-1 -o --proxy http://localhost:2426",
     "build": "echo 'No build process needed for this static site'",
     "serve": "python -m http.server 2427"
   },

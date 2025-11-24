@@ -29,6 +29,8 @@ services:
       dockerfile: Dockerfile.proxy
     container_name: character-generator-proxy
     restart: unless-stopped
+    ports:
+      - "${PROXY_PORT:-2426}:${PROXY_PORT:-2426}"
     environment:
       - NODE_ENV=production
       - PORT=${PROXY_PORT:-2426}

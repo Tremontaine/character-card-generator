@@ -89,10 +89,8 @@ class ImageGenerator {
     // For remote URLs, use the proxy endpoint to avoid CORS issues
     console.log("🔄 Fetching remote URL via proxy to avoid CORS...");
     try {
-      // Detect if we're running locally or in Docker
-      const isLocalDev = window.location.port === "2427";
-      const baseUrl = isLocalDev ? "http://localhost:2426" : "";
-      const proxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(actualUrl)}`;
+      // Use relative path - proxy handles redirection
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(actualUrl)}`;
 
       const response = await fetch(proxyUrl);
       if (response.ok) {
@@ -224,10 +222,8 @@ class ImageGenerator {
           "🔄 Converting remote image URL to blob URL via proxy for CORS safety",
         );
         try {
-          // Detect if we're running locally or in Docker
-          const isLocalDev = window.location.port === "2427";
-          const baseUrl = isLocalDev ? "http://localhost:2426" : "";
-          const proxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+          // Use relative path - proxy handles redirection
+          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 
           const response = await fetch(proxyUrl);
           if (!response.ok) {
@@ -236,7 +232,9 @@ class ImageGenerator {
           const blob = await response.blob();
           displayUrl = URL.createObjectURL(blob);
           shouldCleanupBlob = true;
-          console.log("✅ Successfully converted remote URL to blob URL via proxy");
+          console.log(
+            "✅ Successfully converted remote URL to blob URL via proxy",
+          );
         } catch (error) {
           console.warn(
             "⚠️ Could not convert remote URL to blob via proxy, using original:",

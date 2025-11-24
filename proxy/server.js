@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const fetch = require("node-fetch");
+require("dotenv").config({ path: "../.env" });
 
 const app = express();
 const PORT = process.env.PORT || 2426;
@@ -70,9 +71,9 @@ app.post("/api/text/chat/completions", async (req, res) => {
     const isOpenRouter = apiUrl.includes("openrouter.ai");
     const additionalHeaders = isOpenRouter
       ? {
-        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-        "X-Title": "SillyTavern Character Generator",
-      }
+          "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+          "X-Title": "SillyTavern Character Generator",
+        }
       : {};
 
     const requestBody = {
@@ -207,9 +208,9 @@ app.post("/api/image/generations", async (req, res) => {
     const isOpenRouter = apiUrl.includes("openrouter.ai");
     const additionalHeaders = isOpenRouter
       ? {
-        "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
-        "X-Title": "SillyTavern Character Generator",
-      }
+          "HTTP-Referer": process.env.FRONTEND_URL || "http://localhost:2427",
+          "X-Title": "SillyTavern Character Generator",
+        }
       : {};
 
     // Try Bearer auth first (most common for image APIs)
@@ -286,7 +287,11 @@ app.get("/api/proxy-image", async (req, res) => {
     const response = await fetch(imageUrl);
 
     if (!response.ok) {
-      console.error("Failed to fetch image:", response.status, response.statusText);
+      console.error(
+        "Failed to fetch image:",
+        response.status,
+        response.statusText,
+      );
       return res.status(response.status).json({
         error: {
           code: response.status.toString(),

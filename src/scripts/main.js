@@ -10,6 +10,7 @@ class CharacterGeneratorApp {
     this.currentCharacter = null;
     this.originalCharacter = null; // Store the original AI-generated version
     this.currentImageUrl = null;
+    this.lorebookData = null; // Store loaded lorebook data
     // Removed currentImageBlob - we now convert fresh from URL on download
     this.isGenerating = false;
 
@@ -127,6 +128,12 @@ class CharacterGeneratorApp {
     const imageUploadInput = document.getElementById("image-upload-input");
     imageUploadInput.addEventListener("change", (e) =>
       this.handleImageUpload(e),
+    );
+
+    // Lorebook upload input
+    const lorebookInput = document.getElementById("lorebook-file");
+    lorebookInput.addEventListener("change", (e) =>
+      this.handleLorebookUpload(e),
     );
 
     // Debug mode toggle
@@ -257,6 +264,7 @@ class CharacterGeneratorApp {
   saveAPISettings() {
     this.config.loadFromForm();
     this.config.saveConfig();
+    this.checkAPIStatus();
   }
 
   async handleAPIConfig() {
@@ -352,12 +360,16 @@ class CharacterGeneratorApp {
       const streamSection = document.querySelector(".stream-section");
       streamSection.style.display = "block";
 
+      const pov = document.getElementById("pov-select").value;
+
       // Generate character data with streaming
       this.showStreamMessage("🚀 Starting character generation...\n\n");
       this.currentCharacter = await this.characterGenerator.generateCharacter(
         concept,
         characterName,
         (token, fullContent) => this.handleCharacterStream(token, fullContent),
+        pov,
+        this.lorebookData
       );
 
       // Store original for reset functionality
@@ -1199,6 +1211,30 @@ class CharacterGeneratorApp {
       }
     });
   }
+  handleLorebookUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const json = JSON.parse(e.target.result);
+        this.lorebookData = json;
+
+        // Update UI to show loaded status
+        const statusIcon = document.getElementById("lorebook-status");
+        statusIcon.style.display = "block";
+        this.showNotification("Lorebook loaded successfully!", "success");
+        console.log("Lorebook loaded:", this.lorebookData);
+      } catch (error) {
+        console.error("Error parsing lorebook:", error);
+        this.showNotification("Failed to parse Lorebook JSON", "error");
+        this.lorebookData = null;
+        document.getElementById("lorebook-status").style.display = "none";
+      }
+    };
+    reader.readAsText(file);
+  }
 }
 
 // Update prompt character counter
@@ -1213,7 +1249,6 @@ window.updatePromptCharCount = function () {
     // Change color based on character count
     if (length >= 950) {
       counter.style.color = "#ef4444"; // Red
-    } else if (length >= 850) {
       counter.style.color = "#f59e0b"; // Orange
     } else {
       counter.style.color = "#9ca3af"; // Gray

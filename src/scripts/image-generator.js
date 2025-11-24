@@ -86,22 +86,24 @@ class ImageGenerator {
       }
     }
 
-    // For remote URLs, try to fetch directly first (preferred over canvas)
-    console.log("🔄 Fetching remote URL directly for blob conversion...");
+    // For remote URLs, use the proxy endpoint to avoid CORS issues
+    console.log("🔄 Fetching remote URL via proxy to avoid CORS...");
     try {
-      const response = await fetch(actualUrl, {
-        mode: "cors",
-        credentials: "omit",
-      });
+      // Detect if we're running locally or in Docker
+      const isLocalDev = window.location.port === "2427";
+      const baseUrl = isLocalDev ? "http://localhost:2426" : "";
+      const proxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(actualUrl)}`;
+
+      const response = await fetch(proxyUrl);
       if (response.ok) {
         const blob = await response.blob();
-        console.log("✅ Successfully fetched remote URL as blob");
+        console.log("✅ Successfully fetched remote URL via proxy");
         return blob;
       }
-      console.warn("⚠️ Direct fetch failed, falling back to canvas conversion");
+      console.warn("⚠️ Proxy fetch failed, falling back to canvas conversion");
     } catch (error) {
       console.warn(
-        "⚠️ Direct fetch failed, falling back to canvas conversion:",
+        "⚠️ Proxy fetch failed, falling back to canvas conversion:",
         error.message,
       );
     }
@@ -219,23 +221,25 @@ class ImageGenerator {
         !imageUrl.startsWith("data:")
       ) {
         console.log(
-          "🔄 Converting remote image URL to blob URL for CORS safety",
+          "🔄 Converting remote image URL to blob URL via proxy for CORS safety",
         );
         try {
-          const response = await fetch(imageUrl, {
-            mode: "cors",
-            credentials: "omit",
-          });
+          // Detect if we're running locally or in Docker
+          const isLocalDev = window.location.port === "2427";
+          const baseUrl = isLocalDev ? "http://localhost:2426" : "";
+          const proxyUrl = `${baseUrl}/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+
+          const response = await fetch(proxyUrl);
           if (!response.ok) {
             throw new Error(`Failed to fetch image: ${response.statusText}`);
           }
           const blob = await response.blob();
           displayUrl = URL.createObjectURL(blob);
           shouldCleanupBlob = true;
-          console.log("✅ Successfully converted remote URL to blob URL");
+          console.log("✅ Successfully converted remote URL to blob URL via proxy");
         } catch (error) {
           console.warn(
-            "⚠️ Could not convert remote URL to blob, using original:",
+            "⚠️ Could not convert remote URL to blob via proxy, using original:",
             error.message,
           );
           // Fall back to original URL if blob conversion fails

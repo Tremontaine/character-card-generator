@@ -6,11 +6,11 @@
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run frontend\"",
     "server": "cd proxy && npm install && npm start",
-    "frontend": "npx http-server . -p ${FRONTEND_PORT:-2427} -c-1",
+    "frontend": "npx http-server . -p 2427 -c-1",
     "dev": "concurrently \"npm run server\" \"npm run dev-frontend\"",
-    "dev-frontend": "npx http-server . -p ${FRONTEND_PORT:-2427} -c-1 -o",
+    "dev-frontend": "npx http-server . -p 2427 -c-1 -o",
     "build": "echo 'No build process needed for this static site'",
-    "serve": "python -m http.server ${FRONTEND_PORT:-2427}"
+    "serve": "python -m http.server 2427"
   },
   "keywords": [
     "sillytavern",

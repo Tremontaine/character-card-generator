@@ -14,12 +14,14 @@ class CharacterGenerator {
     return this.apiHandler;
   }
 
-  async generateCharacter(concept, characterName, onStream = null) {
+  async generateCharacter(concept, characterName, onStream = null, pov = "first", lorebook = null) {
     try {
       this.rawCharacterData = await this.apiHandlerInstance.generateCharacter(
         concept,
         characterName,
         onStream,
+        pov,
+        lorebook
       );
       this.parsedCharacter = this.parseCharacterData(this.rawCharacterData);
       return this.parsedCharacter;
@@ -40,28 +42,52 @@ class CharacterGenerator {
     };
 
     // Extract character name from profile section
+    // Try standard header format first: # Name's Profile
     const nameMatch = rawData.match(/^#\s*([^'\\]*(?:\\.[^'\\]*)*)'s Profile/i);
     if (nameMatch) {
       character.name = nameMatch[1].trim();
     } else {
-      // Try to find name in text
-      const nameTextMatch = rawData.match(/The name's\s+(\w+)/i);
+      // Try to find name in text (First Person: "The name's Name")
+      const nameTextMatch = rawData.match(/The name's\s+([A-Z][a-z]+(?: [A-Z][a-z]+)*)/);
       if (nameTextMatch) {
         character.name = nameTextMatch[1].trim();
+      } else {
+        // Try Third Person: "Name is..." (at start of description)
+        const thirdPersonMatch = rawData.match(/^(?:#\s*[^#\n]+\n+)?([A-Z][a-z]+(?: [A-Z][a-z]+)*)\s+is\b/m);
+        if (thirdPersonMatch) {
+          character.name = thirdPersonMatch[1].trim();
+        }
       }
     }
 
-    // Extract description section (everything from # Name's Profile to ## My Personality)
+    // Fallback if name is still missing but we have content
+    if (!character.name) {
+      console.warn("Could not extract character name. Using default.");
+      character.name = "{{char}}";
+    }
+
+    // Extract description section (everything from start or # Profile to ## Personality)
+    // More robust regex that doesn't strictly require the # Profile header
     const descriptionMatch = rawData.match(
-      /#\s*[^#]+?'s Profile([\s\S]*?)(?=##\s*My Personality)/i,
+      /(?:#\s*[^#]+?'s Profile[\s\S]*?)?([\s\S]*?)(?=##\s*(?:My\s+)?Personality)/i,
     );
     if (descriptionMatch) {
-      character.description = `# ${character.name}'s Profile\n\n${descriptionMatch[1].trim()}`;
+      // If we captured the header in the group, it's fine. If not, we prepend it if we have a name.
+      let descContent = descriptionMatch[1].trim();
+
+      // Clean up potential leading newlines or markdown artifacts
+      descContent = descContent.replace(/^#\s*[^#\n]+\n+/, "").trim();
+
+      if (character.name && character.name !== "Unknown Character") {
+        character.description = `# ${character.name}'s Profile\n\n${descContent}`;
+      } else {
+        character.description = descContent;
+      }
     }
 
     // Extract personality section (include the title)
     const personalityMatch = rawData.match(
-      /(##\s*My Personality[\s\S]*?Drives[\s\S]*?Me[\s\S]*?)(?=#\s*The Roleplay|$)/i,
+      /(##\s*(?:My\s+)?Personality[\s\S]*?)(?=#\s*The Roleplay|$)/i,
     );
     if (personalityMatch) {
       character.personality = personalityMatch[1].trim();

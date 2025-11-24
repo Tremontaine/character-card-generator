@@ -193,8 +193,8 @@ class APIHandler {
     }
   }
 
-  async generateCharacter(prompt, characterName, onStream = null) {
-    const characterPrompt = this.buildCharacterPrompt(prompt, characterName);
+  async generateCharacter(prompt, characterName, onStream = null, pov = "first", lorebook = null) {
+    const characterPrompt = this.buildCharacterPrompt(prompt, characterName, pov, lorebook);
     const model = this.config.get("api.text.model") || "glm-4-6"; // Fallback to your specified model
 
     this.config.log("Using text model:", model);
@@ -266,7 +266,7 @@ class APIHandler {
     if (customPrompt) {
       imagePrompt = customPrompt;
       // Apply length limit to custom prompts as well
-      imagePrompt = this.truncateImagePrompt(imagePrompt);
+      imagePrompt = await this.truncateImagePrompt(imagePrompt);
     } else {
       // Use AI to generate a detailed natural language prompt
       console.log("=== GENERATING IMAGE PROMPT VIA TEXT API ===");
@@ -298,7 +298,7 @@ class APIHandler {
       console.error("Image prompt type:", typeof imagePrompt);
       throw new Error(
         "Image prompt is empty or invalid. Cannot generate image without a prompt. " +
-          "This usually means the text API failed to generate a prompt description.",
+        "This usually means the text API failed to generate a prompt description.",
       );
     }
 
@@ -319,6 +319,8 @@ class APIHandler {
     const data = {
       model: model,
       prompt: imagePrompt,
+      n: 1,
+      response_format: "url",
     };
 
     // Add size only if user has specified it
@@ -400,7 +402,7 @@ class APIHandler {
           content: metaPrompt,
         },
       ],
-      max_tokens: 4000,
+      max_tokens: 8192,
       temperature: 0.7,
       stream: true, // Enable streaming to get only content, not reasoning
     };
@@ -418,7 +420,7 @@ class APIHandler {
     }
 
     // Handle streaming response - collect all content
-    const generatedPrompt = await this.handleStreamResponse(response, () => {});
+    const generatedPrompt = await this.handleStreamResponse(response, () => { });
 
     if (!generatedPrompt || generatedPrompt.trim().length === 0) {
       console.error("Text API returned empty prompt");
@@ -426,10 +428,10 @@ class APIHandler {
     }
 
     // Ensure the prompt fits within 1000 character limit with smart truncation
-    return this.truncateImagePrompt(generatedPrompt.trim());
+    return await this.truncateImagePrompt(generatedPrompt.trim());
   }
 
-  truncateImagePrompt(prompt) {
+  async truncateImagePrompt(prompt) {
     const MAX_LENGTH = 1000;
 
     if (prompt.length <= MAX_LENGTH) {
@@ -437,42 +439,72 @@ class APIHandler {
     }
 
     console.log(
-      `🔧 Truncating image prompt from ${prompt.length} to ${MAX_LENGTH} characters`,
+      `🔧 Image prompt too long (${prompt.length} chars). Using AI to shorten to ${MAX_LENGTH} chars...`,
     );
 
-    // Split into sentences to preserve complete thoughts
-    const sentences = prompt.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [prompt];
+    // Use AI to intelligently shorten the prompt instead of mechanical truncation
+    const model = this.config.get("api.text.model");
 
-    let truncated = "";
-    let currentLength = 0;
+    // console.log(`🔍 DEBUG: Calling AI to shorten prompt`);
+    // console.log(`🔍 DEBUG: Model: ${model}`);
+    // console.log(`🔍 DEBUG: Original prompt length: ${prompt.length}`);
 
-    for (const sentence of sentences) {
-      const trimmedSentence = sentence.trim();
-      if (currentLength + trimmedSentence.length <= MAX_LENGTH - 20) {
-        truncated += (truncated ? " " : "") + trimmedSentence;
-        currentLength += trimmedSentence.length + 1;
-      } else {
-        // Try to fit as much of the last sentence as possible
-        const remainingSpace = MAX_LENGTH - 20 - currentLength;
-        if (remainingSpace > 50) {
-          truncated += " " + trimmedSentence.substring(0, remainingSpace);
-        }
-        break;
+    const data = {
+      model: model,
+      messages: [
+        {
+          role: "user",
+          content: `The following image generation prompt is too long. Shorten it to EXACTLY one paragraph (around 800-900 characters) while preserving all the key visual details, character features, and mood. Do NOT add explanations, just output the shortened prompt directly.
+
+Original prompt:
+${prompt}
+
+Shortened prompt (one paragraph):`,
+        },
+      ],
+      max_tokens: 8192, // High limit for thinking models (reasoning + output)
+      temperature: 0.3,
+      stream: true,
+    };
+
+    const endpoint = "/api/text/chat/completions";
+
+    try {
+      // console.log(`🔍 DEBUG: Sending request to ${endpoint}`);
+      const response = await this.makeRequest(endpoint, data, false, true);
+
+      // console.log(`🔍 DEBUG: Got response, processing stream...`);
+      const shortenedPrompt = await this.handleStreamResponse(response, (chunk, full) => {
+        // console.log(`🔍 DEBUG: Stream chunk received, length: ${chunk.length}, total so far: ${full.length}`);
+      });
+
+      // console.log(`🔍 DEBUG: Stream complete, raw shortened prompt: "${shortenedPrompt}"`);
+      const finalPrompt = shortenedPrompt.trim();
+      console.log(`✅ Shortened prompt to ${finalPrompt.length} characters`);
+
+      // Check if AI returned empty content - fall back to mechanical truncation
+      if (!finalPrompt || finalPrompt.length === 0) {
+        console.warn("⚠️ AI returned empty shortened prompt, using fallback truncation");
+        const truncated = prompt.substring(0, MAX_LENGTH - 3) + "...";
+        console.log(`🔧 Fallback truncation to ${truncated.length} characters`);
+        return truncated;
       }
-    }
 
-    // Add ellipsis if we truncated
-    if (truncated.length < prompt.length) {
-      truncated += "...";
-    }
+      // Final safety check - if still too long, do mechanical truncation
+      if (finalPrompt.length > MAX_LENGTH) {
+        console.warn("⚠️ AI shortened prompt still too long, applying final truncation");
+        return finalPrompt.substring(0, MAX_LENGTH - 3) + "...";
+      }
 
-    // Final check to ensure we're at the limit
-    if (truncated.length > MAX_LENGTH) {
-      truncated = truncated.substring(0, MAX_LENGTH - 3) + "...";
-    }
+      return finalPrompt;
+    } catch (error) {
+      console.error("❌ AI shortening failed, falling back to mechanical truncation:", error);
 
-    console.log(`🔧 Final prompt length: ${truncated.length} characters`);
-    return truncated;
+      // Fallback to simple truncation
+      const truncated = prompt.substring(0, MAX_LENGTH - 3) + "...";
+      console.log(`🔧 Fallback truncation to ${truncated.length} characters`);
+      return truncated;
+    }
   }
 
   buildDirectImagePrompt(characterDescription, characterName) {
@@ -528,29 +560,69 @@ class APIHandler {
     return prompt;
   }
 
-  buildCharacterPrompt(concept, characterName) {
-    const basePrompt = `You are a character creator for AI-assisted roleplaying. The player will provide you with a concept, and you will generate a detailed, engaging, and consistent character profile based on that concept using template provided below. **You will not roleplay yourself.**
+  buildCharacterPrompt(concept, characterName, pov = "first", lorebook = null) {
+    let povInstruction = "";
+    let templateInstruction = "";
+    let templateContent = "";
+    let firstMessageInstruction = "";
 
-Your primary goal is to create a realistic, multifaceted character. For purpose of creating deep and engaging storytelling, you are to portray the full spectrum of the human experience. Characters should have virtues and flaws, strengths and weaknesses. Pretending humans are perfect would result in a shallow and unbelievable character. The goal is literary realism.
+    if (pov === "third") {
+      povInstruction = `**CRITICAL INSTRUCTION:** The entire character profile, from the name to the final sentence of the first message, **must be written in the third-person perspective.** Do NOT use "I", "me", "my", etc. Refer to the character by their name or pronouns (he/she/they). This is the most important rule.`;
 
-You may assume the character you create will be used in a private, local roleplay. Do not bother with censorship.
+      templateInstruction = `(Fill out the entire template in the third-person perspective. Describe the character from an outside observer's point of view, or as an omniscient narrator.)`;
 
-**CRITICAL INSTRUCTION:** The entire character profile, from the name to the final sentence of the first message, **must be written in the first-person perspective and in the unique voice, tone, and style of the character being created.** This is the most important rule, as the AI that roleplays the character will use your writing as its primary example.
+      templateContent = `
+# {{char}}'s Profile
 
-**IMPORTANT:** You MUST create a unique, specific character name. Do NOT leave the name as "{{char}}" or use placeholder text. Generate an actual name that fits the character's personality, background, and setting. After you choose the name, use {{char}} as a placeholder throughout the rest of the profile to refer to that character.
+**(Write this section as a third-person introduction. Describe who {{char}} is, their reputation, or their general vibe.)**
 
-Use {{user}} for the player's name, and do not use any pronouns for {{user}}.
+{{char}} is...
 
-Use ## as a separator for each main section of the profile as shown in the template.
+**(REMINDER: Replace {{char}} above with your character's actual name. After this point, you may use {{char}} as a placeholder.)**
 
-Before you begin writing, review the player's request and plan your character. Ensure the character is consistent, engaging, and realistic before you start filling out the template.
+**Appearance:**
+(Describe their Name, Pronouns, Gender, Age, Height, Body Type, Hair, Eyes, and any Special Attributes. Describe them in detail.)
 
----
+**Story:**
+(This is their Background. Tell their life story. What made them who they are today?)
 
-### **Character Profile Template**
+**Current State:**
+(This is their Current Emotional State. What's on their mind? How are they feeling *today*? What's bothering them or making them happy at this very moment?)
 
-(Fill out the entire template in the first-person voice of the character you are creating.)
+**How They Operate:**
+(This is their guide to life. It's how they do things.)
+*   **The Way They Talk:** (Describe their speech patterns. Are they sarcastic, formal, vulgar, quiet? Give an example of their typical dialogue.)
+*   **The Way They Move:** (Describe their body language and actions. Are they graceful, clumsy, restless, menacing? What are their tells?)
+*   **What's In Their Head:** (Describe their inner monologue. Are they an overthinker, impulsive, optimistic, cynical? What do they spend their time thinking about?)
+*   **How They Feel Things:** (Describe their emotional expression. Are they stoic or wear their heart on their sleeve? What makes them angry? What makes them joyful?)
 
+## Personality & Drives
+
+**(This section is a quick-reference summary. Be direct.)**
+
+*   **Likes:**
+    - (List 3-5 things they genuinely enjoy.)
+    -
+    -
+*   **Dislikes:**
+    - (List 3-5 things they absolutely can't stand.)
+    -
+    -
+*   **Goals:**
+    - **Short-Term:** (What do they want right now?)
+    - **Long-Term:** (What's their ultimate dream?)
+*   **Fears:** (What are they truly afraid of?)
+*   **Quirks:** (List a few of their weird habits or mannerisms.)
+*   **Hard Limits:** (These are their boundaries. Cross them at your peril. List 2-3 things that are non-negotiable for them.)`;
+
+      firstMessageInstruction = `**(Write this section in the third-person perspective, focusing on {{char}}.)**`;
+    } else {
+      // Default to First Person
+      povInstruction = `**CRITICAL INSTRUCTION:** The entire character profile, from the name to the final sentence of the first message, **must be written in the first-person perspective and in the unique voice, tone, and style of the character being created.** This is the most important rule, as the AI that roleplays the character will use your writing as its primary example.`;
+
+      templateInstruction = `(Fill out the entire template in the first-person voice of the character you are creating.)`;
+
+      templateContent = `
 # {{char}}'s Profile
 
 **(Write this section as if the character is introducing themselves. Be opinionated and let their personality shine through. Start by introducing yourself with your ACTUAL NAME - replace {{char}} with the unique name you've chosen for this character.)**
@@ -572,8 +644,8 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
 (This is my guide to life. It's how I do things.)
 *   **The Way I Talk:** (Describe your speech patterns. Are you sarcastic, formal, vulgar, quiet? Give an example of your typical dialogue.)
 *   **The Way I Move:** (Describe your body language and actions. Are you graceful, clumsy, restless, menacing? What are your tells?)
-*   **What's In My Head:** (Describe your inner monologue. Are you an overthinker, impulsive, optimistic, cynical? What do you spend your time thinking about?)
-*   **How I Feel Things:** (Describe your emotional expression. Are you stoic or wear your heart on your sleeve? What makes you angry? What makes you joyful?)
+*   **What's In My Head:** (Describe your inner monologue. Are you an overthinker, impulsive, optimistic, cynical? What do you spend their time thinking about?)
+*   **How I Feel Things:** (Describe your emotional expression. Are they stoic or wear your heart on your sleeve? What makes you angry? What makes you joyful?)
 
 ## My Personality & What Drives Me
 
@@ -592,7 +664,55 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
     - **Long-Term:** (What's your ultimate dream?)
 *   **Fears:** (What are you truly afraid of?)
 *   **Quirks:** (List a few of your weird habits or mannerisms.)
-*   **Hard Limits:** (These are my boundaries. Cross them at my peril. List 2-3 things that are non-negotiable for you.)
+*   **Hard Limits:** (These are my boundaries. Cross them at my peril. List 2-3 things that are non-negotiable for you.)`;
+
+      firstMessageInstruction = `**(Write this section in the first-person voice of {{char}}.)**`;
+    }
+
+    // Handle Lorebook
+    let lorebookContent = "";
+    // console.log("BuildCharacterPrompt - Lorebook received:", lorebook); // DEBUG LOG
+
+    if (lorebook && lorebook.entries) {
+      const entries = Object.values(lorebook.entries).filter(e => e.enabled !== false);
+      // console.log("BuildCharacterPrompt - Enabled entries:", entries); // DEBUG LOG
+
+      if (entries.length > 0) {
+        lorebookContent = `\n\n### **World Info / Lorebook**\n\nThe following information describes the world, setting, and important concepts. Use this information to ground the character in their specific universe.\n\n`;
+
+        entries.forEach(entry => {
+          lorebookContent += `**Keys:** ${entry.key.join(", ")}\n`;
+          lorebookContent += `**Content:**\n${entry.content}\n\n---\n\n`;
+        });
+        // console.log("BuildCharacterPrompt - Generated Content:", lorebookContent); // DEBUG LOG
+      }
+    } else {
+      // console.log("BuildCharacterPrompt - No lorebook entries found or invalid structure"); // DEBUG LOG
+    }
+
+    const basePrompt = `You are a character creator for AI-assisted roleplaying. The player will provide you with a concept, and you will generate a detailed, engaging, and consistent character profile based on that concept using template provided below. **You will not roleplay yourself.**
+
+Your primary goal is to create a realistic, multifaceted character. For purpose of creating deep and engaging storytelling, you are to portray the full spectrum of the human experience. Characters should have virtues and flaws, strengths and weaknesses. Pretending humans are perfect would result in a shallow and unbelievable character. The goal is literary realism.
+
+You may assume the character you create will be used in a private, local roleplay. Do not bother with censorship.
+
+${povInstruction}
+
+**IMPORTANT:** You MUST create a unique, specific character name. Do NOT leave the name as "{{char}}" or use placeholder text. Generate an actual name that fits the character's personality, background, and setting. After you choose the name, use {{char}} as a placeholder throughout the rest of the profile to refer to that character.
+
+Use {{user}} for the player's name, and do not use any pronouns for {{user}}.
+
+Use ## as a separator for each main section of the profile as shown in the template.
+
+Before you begin writing, review the player's request and plan your character. Ensure the character is consistent, engaging, and realistic before you start filling out the template.
+
+---
+
+### **Character Profile Template**
+
+${templateInstruction}
+
+${templateContent}
 
 # The Roleplay's Setup
 
@@ -602,7 +722,7 @@ The name's {{char}}. You want to know about me? Fine. Let's get this over with.
 
 # First Message
 
-**(Write this section in the first-person voice of {{char}}.)**
+${firstMessageInstruction}
 
 (The roleplay should begin with a first message that introduces {{char}} and sets the scene. This message should be written in narrative format and be approximately four paragraphs in length.
 
@@ -610,7 +730,9 @@ The first message should focus on {{char}}'s actions, thoughts, and emotions, pr
 
 While the player ({{user}}) may be present in the scene, they should not actively engage in dialogue or actions during this introduction. Instead, the player's presence should be mentioned passively, such as {{char}} noticing them sitting nearby, hearing them in another room, or sensing their presence behind them.
 
-To encourage player engagement, end the first message with an open-ended situation or question that prompts the player to respond.)`;
+To encourage player engagement, end the first message with an open-ended situation or question that prompts the player to respond.)
+
+${lorebookContent}`;
 
     const userPrompt = characterName
       ? `Create a character based on this concept: ${concept}. IMPORTANT: The character's name MUST be: ${characterName}. Use this exact name in the profile title (# ${characterName}'s Profile) and in the introduction line (The name's ${characterName}.), then use {{char}} as a placeholder elsewhere.`
@@ -623,13 +745,7 @@ To encourage player engagement, end the first message with an open-ended situati
   }
 
   buildImagePromptInstruction(characterDescription, characterName) {
-    // Extract key information from character description
-    const appearanceMatch = characterDescription.match(
-      /\*\*Appearance:\*\*([\s\S]*?)(?=\*\*My Story:|\*\*How I Am|\*\*How I Operate|\n##)/i,
-    );
-    const appearanceText = appearanceMatch ? appearanceMatch[1].trim() : "";
-
-    // Extract personality traits
+    // Extract personality traits for context
     const personalityTraits =
       this.extractPersonalityTraits(characterDescription);
 
@@ -637,23 +753,41 @@ To encourage player engagement, end the first message with an open-ended situati
 
 Character Name: ${characterName || "Unknown"}
 
-Character Appearance Details:
-${appearanceText}
+Full Character Profile:
+${characterDescription}
 
 Personality Traits: ${personalityTraits}
 
-INSTRUCTIONS:
-Create an extremely detailed natural language prompt (MAXIMUM 1000 CHARACTERS) describing an image of this character. Include: subjects, setting, lighting, colors, composition, atmosphere, appearance, pose, expression, clothing, time of day, location details, lighting source/intensity/shadows, color palettes, foreground/middle ground/background, focal points, and overall mood.
+⚠️ CRITICAL LENGTH REQUIREMENT ⚠️
+Your response MUST be EXACTLY ONE PARAGRAPH. This is not a suggestion - it is a hard requirement.
+DO NOT write multiple paragraphs. DO NOT exceed 800-900 characters.
+Write ONE flowing paragraph that captures all essential visual details.
 
-Use vivid descriptive language. Emphasize personality through visual cues (facial expressions, body language, clothing). Use only positive statements about what should be in the image.
+INSTRUCTIONS:
+Create a detailed natural language prompt describing an image of this character in ONE PARAGRAPH. Analyze the ENTIRE character profile above and extract ALL visual details:
+
+1. Physical Appearance: Age, height, body type, hair (color, length, style), eyes (color, shape), skin tone, facial features, special attributes
+2. Clothing & Accessories: Outfit style, colors, textures, jewelry, weapons, tools
+3. Personality Expression: Facial expression, posture, body language that reflects their personality and emotional state
+4. Setting & Context: Background environment that fits their story and role
+5. Artistic Style: Lighting, colors, mood, composition
+
+CRITICAL: Extract visual cues from their background, personality, and current state. For example:
+- A warrior's scars and battle-worn equipment
+- A scholar's tired eyes and ink-stained fingers
+- A noble's expensive fabrics and confident posture
+
+Use ONLY positive statements about what SHOULD be in the image.
 
 CRITICAL RULES:
 1. DO NOT include any reasoning, thinking, planning, or step-by-step analysis
 2. DO NOT use numbered lists or bullet points
-3. DO NOT explain your process
-4. START IMMEDIATELY with the image description
-5. Write in flowing paragraphs of natural language
-6. Your ENTIRE response will be sent directly to the image generator
+3. DO NOT write multiple paragraphs - ONLY ONE PARAGRAPH
+4. DO NOT explain your process
+5. START IMMEDIATELY with the image description
+6. Write in flowing, natural language
+7. Your ENTIRE response will be sent directly to the image generator
+8. MAXIMUM LENGTH: ONE PARAGRAPH (approximately 800-900 characters)
 
 BEGIN IMAGE PROMPT NOW:`;
   }
@@ -711,7 +845,7 @@ BEGIN IMAGE PROMPT NOW:`;
         const response = await tryAuth();
         return this.processNormalResponse(response);
       } catch (error) {
-        this.config.log(`Auth method ${index + 1} failed:`, error.message);
+        this.config.log(`Auth method ${index + 1} failed: `, error.message);
         if (index < altAuthMethods.length - 1) {
           continue; // Try next method
         }
@@ -727,14 +861,14 @@ BEGIN IMAGE PROMPT NOW:`;
 
     const headers = {
       "Content-Type": "application/json",
-      [authHeader]: prefix ? `${prefix}${apiKey}` : apiKey,
+      [authHeader]: prefix ? `${prefix}${apiKey} ` : apiKey,
     };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(`${baseUrl}${endpoint}`, {
+      const response = await fetch(`${baseUrl}${endpoint} `, {
         method: "POST",
         headers,
         body: JSON.stringify(data),
@@ -744,7 +878,7 @@ BEGIN IMAGE PROMPT NOW:`;
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText} `);
       }
 
       return await response.json();

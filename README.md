@@ -1,6 +1,7 @@
 # SillyTavern Character Generator (v2)
 
 ![SillyTavern Character Generator Interface](clean.png)
+![SillyTavern Character Generator Interface - Generated Card](generated.png)
 
 Web app for generating, editing, importing, revising, and exporting SillyTavern character cards (Spec V2).
 

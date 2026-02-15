@@ -5,6 +5,7 @@ class APIHandler {
     this.lastGeneratedImagePrompt = null; // Store the last generated prompt for display
     this.currentAbortController = null; // Store current abort controller for stopping generation
     this.currentReader = null; // Store current stream reader for cancellation
+    this.userStopRequested = false;
   }
 
   async makeRequest(endpoint, data, isImageRequest = false, stream = false) {
@@ -52,6 +53,7 @@ class APIHandler {
     }
 
     const controller = new AbortController();
+    this.userStopRequested = false;
     this.currentAbortController = controller;
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -134,7 +136,12 @@ class APIHandler {
       clearTimeout(timeoutId);
 
       if (error.name === "AbortError") {
-        throw new Error("Generation stopped by user.");
+        if (this.userStopRequested) {
+          throw new Error("Generation stopped by user.");
+        }
+        throw new Error(
+          "Request timed out or was interrupted. Consider increasing API timeout in settings.",
+        );
       }
 
       console.error("API Request Failed:", error);
@@ -972,8 +979,128 @@ BEGIN IMAGE PROMPT NOW:`;
     }
   }
 
+  parseJsonFromModelOutput(output) {
+    if (!output || typeof output !== "string") {
+      throw new Error("Model output is empty");
+    }
+
+    let cleaned = output.trim();
+
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned
+        .replace(/^```(?:json)?/i, "")
+        .replace(/```$/i, "")
+        .trim();
+    }
+
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[0];
+    }
+
+    return JSON.parse(cleaned);
+  }
+
+  async reviseCharacter(currentCharacter, revisionInstruction, pov = "first") {
+    if (!currentCharacter) {
+      throw new Error("Character is required for revision");
+    }
+    if (!revisionInstruction || !revisionInstruction.trim()) {
+      throw new Error("Revision instruction is required");
+    }
+
+    const model = this.config.get("api.text.model");
+    const povText = pov === "third" ? "third-person" : "first-person";
+
+    const data = {
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You revise roleplay character cards. Return strict JSON only with fields: name, description, personality, scenario, firstMessage. Keep markdown formatting in fields where appropriate. Preserve style quality and coherence.",
+        },
+        {
+          role: "user",
+          content: `Revise the following character according to this request: ${revisionInstruction}\n\nPOV requirement: keep content in ${povText} style where it originally applies.\n\nCurrent character JSON:\n${JSON.stringify(
+            currentCharacter,
+            null,
+            2,
+          )}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 8192,
+      stream: false,
+    };
+
+    const response = await this.makeRequest(
+      "/chat/completions",
+      data,
+      false,
+      false,
+    );
+    const output = this.processNormalResponse(response);
+    const parsed = this.parseJsonFromModelOutput(output);
+
+    return {
+      name: parsed.name || currentCharacter.name || "Unnamed Character",
+      description: parsed.description || currentCharacter.description || "",
+      personality: parsed.personality || currentCharacter.personality || "",
+      scenario: parsed.scenario || currentCharacter.scenario || "",
+      firstMessage: parsed.firstMessage || currentCharacter.firstMessage || "",
+    };
+  }
+
+  async describeReferenceImage(imageDataUrl, manualHint = "") {
+    if (!imageDataUrl) {
+      throw new Error("Reference image is required");
+    }
+
+    const model =
+      this.config.get("api.text.visionModel") ||
+      this.config.get("api.text.model");
+    if (!model) {
+      throw new Error("No vision model or text model configured");
+    }
+
+    const systemPrompt =
+      "You describe reference character images for roleplay card generation. Output one concise paragraph that captures visible appearance, clothing, age cues, emotion, posture, accessories, and likely setting. Do not mention uncertainty, policy, or analysis steps.";
+
+    const userText = manualHint
+      ? `Use this user hint while describing: ${manualHint}`
+      : "Describe this character image for roleplay character generation.";
+
+    const data = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: userText },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+      stream: false,
+    };
+
+    const response = await this.makeRequest(
+      "/chat/completions",
+      data,
+      false,
+      false,
+    );
+
+    return this.processNormalResponse(response).trim();
+  }
+
   // Method to stop current generation
   stopGeneration() {
+    this.userStopRequested = true;
     if (this.currentAbortController) {
       this.currentAbortController.abort();
       this.currentAbortController = null;

@@ -19,14 +19,15 @@ class Config {
           baseUrl: "",
           apiKey: "",
           model: "",
-          timeout: 60000,
+          visionModel: "",
+          timeout: 180000,
         },
         image: {
           baseUrl: "",
           apiKey: "",
           model: "",
           size: "",
-          timeout: 60000,
+          timeout: 180000,
         },
       },
       app: {
@@ -84,10 +85,13 @@ class Config {
     const textBaseUrl = document.getElementById("text-api-base")?.value?.trim();
     const textApiKey = document.getElementById("text-api-key")?.value?.trim();
     const textModel = document.getElementById("text-model")?.value?.trim();
+    const visionModel = document.getElementById("vision-model")?.value?.trim();
 
     if (textBaseUrl !== undefined) this.config.api.text.baseUrl = textBaseUrl;
     if (textApiKey !== undefined) this.config.api.text.apiKey = textApiKey;
     if (textModel !== undefined) this.config.api.text.model = textModel;
+    if (visionModel !== undefined)
+      this.config.api.text.visionModel = visionModel;
 
     // No special handling needed when using proxy server
 
@@ -148,10 +152,13 @@ class Config {
       const textBaseUrl = document.getElementById("text-api-base");
       const textApiKey = document.getElementById("text-api-key");
       const textModel = document.getElementById("text-model");
+      const visionModel = document.getElementById("vision-model");
 
       if (textBaseUrl) textBaseUrl.value = this.config.api.text.baseUrl || "";
       if (textApiKey) textApiKey.value = this.config.api.text.apiKey || "";
       if (textModel) textModel.value = this.config.api.text.model || "";
+      if (visionModel)
+        visionModel.value = this.config.api.text.visionModel || "";
 
       // Save image API to form
       const imageBaseUrl = document.getElementById("image-api-base");

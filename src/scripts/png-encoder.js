@@ -113,7 +113,9 @@ class PNGEncoder {
 
       // Safety check to prevent infinite loops and malformed chunks
       if (length < 0 || offset + 12 + length > data.length) {
-        console.warn("Encountered malformed PNG chunk while cleaning metadata.");
+        console.warn(
+          "Encountered malformed PNG chunk while cleaning metadata.",
+        );
         break;
       }
 
@@ -554,7 +556,7 @@ class PNGEncoder {
               let jsonText = textData.text;
               try {
                 // Try to decode as base64
-                jsonText = atob(textData.text);
+                jsonText = this.decodeBase64Utf8(textData.text);
               } catch (e) {
                 // If base64 decode fails, assume it's already plain text
                 console.log("Not base64 encoded, using as-is");
@@ -627,6 +629,15 @@ class PNGEncoder {
     const text = new TextDecoder().decode(data.slice(nullIndex + 1));
 
     return { keyword, text };
+  }
+
+  decodeBase64Utf8(base64Text) {
+    const binary = atob(base64Text);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder("utf-8").decode(bytes);
   }
 }
 

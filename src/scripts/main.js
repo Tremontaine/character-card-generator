@@ -6,11 +6,14 @@ class CharacterGeneratorApp {
     this.pngEncoder = window.pngEncoder;
     this.config = window.config;
     this.apiHandler = window.apiHandler;
+    this.storage = window.characterStorage;
+    this.storageReady = false;
 
     this.currentCharacter = null;
     this.originalCharacter = null; // Store the original AI-generated version
     this.currentImageUrl = null;
     this.lorebookData = null; // Store loaded lorebook data
+    this.referenceImageDataUrl = "";
     // Removed currentImageBlob - we now convert fresh from URL on download
     this.isGenerating = false;
 
@@ -28,9 +31,31 @@ class CharacterGeneratorApp {
     }
 
     await this.config.waitForConfig();
+    await this.ensureStorageReady();
     this.config.saveToForm();
     this.bindEvents();
     this.checkAPIStatus();
+    this.refreshLibraryViews();
+  }
+
+  async ensureStorageReady() {
+    if (!this.storage) {
+      this.storageReady = false;
+      this.updateLibraryStatus("Local library unavailable in this session.");
+      return;
+    }
+
+    try {
+      await this.storage.init();
+      this.storageReady = true;
+      this.updateLibraryStatus("Local library ready.");
+    } catch (error) {
+      console.error("Failed to initialize IndexedDB:", error);
+      this.storageReady = false;
+      this.updateLibraryStatus(
+        "IndexedDB failed to initialize. Prompt/card saving is disabled.",
+      );
+    }
   }
 
   bindEvents() {
@@ -53,6 +78,42 @@ class CharacterGeneratorApp {
     // Regenerate button
     const regenerateBtn = document.getElementById("regenerate-btn");
     regenerateBtn.addEventListener("click", () => this.handleRegenerate());
+
+    // Import card button
+    const importCardBtn = document.getElementById("import-card-btn");
+    const importCardTopBtn = document.getElementById("import-card-top-btn");
+    const importCardInput = document.getElementById("import-card-input");
+    const importCardTopInput = document.getElementById("import-card-top-input");
+    if (importCardInput || importCardTopInput) {
+      if (importCardBtn) {
+        importCardBtn.addEventListener("click", () =>
+          (importCardInput || importCardTopInput).click(),
+        );
+      }
+      if (importCardTopBtn) {
+        importCardTopBtn.addEventListener("click", () =>
+          (importCardTopInput || importCardInput).click(),
+        );
+      }
+      if (importCardInput) {
+        importCardInput.addEventListener("change", (e) =>
+          this.handleImportCard(e),
+        );
+      }
+      if (importCardTopInput) {
+        importCardTopInput.addEventListener("change", (e) =>
+          this.handleImportCard(e),
+        );
+      }
+    }
+
+    // Revision button
+    const reviseCharacterBtn = document.getElementById("revise-character-btn");
+    if (reviseCharacterBtn) {
+      reviseCharacterBtn.addEventListener("click", () =>
+        this.handleReviseCharacter(),
+      );
+    }
 
     // Regenerate image button
     const regenerateImageBtn = document.getElementById("regenerate-image-btn");
@@ -136,6 +197,14 @@ class CharacterGeneratorApp {
       this.handleLorebookUpload(e),
     );
 
+    // Reference image upload input
+    const referenceImageInput = document.getElementById("reference-image-file");
+    if (referenceImageInput) {
+      referenceImageInput.addEventListener("change", (e) =>
+        this.handleReferenceImageUpload(e),
+      );
+    }
+
     // Debug mode toggle
     const debugModeCheckbox = document.getElementById("debug-mode");
     if (debugModeCheckbox) {
@@ -155,7 +224,7 @@ class CharacterGeneratorApp {
 
     // Save API settings on input change
     const apiInputs = document.querySelectorAll(
-      "#text-api-base, #text-api-key, #text-model, #image-api-base, #image-api-key, #image-model",
+      "#text-api-base, #text-api-key, #text-model, #vision-model, #image-api-base, #image-api-key, #image-model",
     );
     apiInputs.forEach((input) => {
       input.addEventListener("change", () => this.saveAPISettings());
@@ -239,6 +308,21 @@ class CharacterGeneratorApp {
         closeModal();
       }
     });
+
+    const promptList = document.getElementById("stored-prompts-list");
+    const cardList = document.getElementById("stored-cards-list");
+
+    if (promptList) {
+      promptList.addEventListener("click", (event) =>
+        this.handleLibraryPromptClick(event),
+      );
+    }
+
+    if (cardList) {
+      cardList.addEventListener("click", (event) =>
+        this.handleLibraryCardClick(event),
+      );
+    }
   }
 
   async checkAPIStatus() {
@@ -345,6 +429,9 @@ class CharacterGeneratorApp {
     const characterName = document
       .getElementById("character-name")
       .value.trim();
+    const referenceImageDescription = document
+      .getElementById("reference-image-description")
+      ?.value?.trim();
 
     if (!concept) {
       this.showNotification("Please enter a character concept", "warning");
@@ -361,21 +448,43 @@ class CharacterGeneratorApp {
       streamSection.style.display = "block";
 
       const pov = document.getElementById("pov-select").value;
+      let effectiveConcept = concept;
+
+      if (referenceImageDescription) {
+        effectiveConcept += `\n\nReference appearance guidance:\n${referenceImageDescription}`;
+      }
+
+      const promptSaved = await this.savePromptToLibrary({
+        concept,
+        characterName,
+        pov,
+        lorebookData: this.lorebookData,
+        referenceImageDescription: referenceImageDescription || "",
+        referenceImageDataUrl: this.referenceImageDataUrl || "",
+      });
+      await this.refreshLibraryViews();
+      if (!promptSaved) {
+        this.showStreamMessage(
+          "⚠️ Prompt could not be saved to local library.\n",
+        );
+      }
 
       // Generate character data with streaming
       this.showStreamMessage("🚀 Starting character generation...\n\n");
       this.currentCharacter = await this.characterGenerator.generateCharacter(
-        concept,
+        effectiveConcept,
         characterName,
         (token, fullContent) => this.handleCharacterStream(token, fullContent),
         pov,
-        this.lorebookData
+        this.lorebookData,
       );
 
       // Store original for reset functionality
       this.originalCharacter = JSON.parse(
         JSON.stringify(this.currentCharacter),
       );
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
 
       this.showStreamMessage("\n\n✅ Character generation complete!\n");
 
@@ -388,8 +497,20 @@ class CharacterGeneratorApp {
       const enableImageGeneration = this.config.get(
         "app.enableImageGeneration",
       );
+      const hasReferenceImage = !!this.referenceImageDataUrl;
 
-      if (imageApiBase && imageApiKey && enableImageGeneration) {
+      if (hasReferenceImage) {
+        this.currentImageUrl = this.referenceImageDataUrl;
+        const imageContainer = document.getElementById("image-content");
+        imageContainer.innerHTML = `
+          <div class="image-container">
+            <img src="${this.currentImageUrl}" alt="${this.currentCharacter.name || "Reference image"}" class="generated-image">
+          </div>
+        `;
+        this.showStreamMessage(
+          "🖼️ Using uploaded reference image as final card image (skipped image API generation)\n",
+        );
+      } else if (imageApiBase && imageApiKey && enableImageGeneration) {
         // Generate image with error handling
         try {
           this.showStreamMessage("🎨 Generating character image...\n");
@@ -439,16 +560,37 @@ class CharacterGeneratorApp {
         const customPromptTextarea = document.getElementById(
           "custom-image-prompt",
         );
+        const referenceDescription = document
+          .getElementById("reference-image-description")
+          ?.value?.trim();
 
         if (promptEditor) {
           promptEditor.style.display = "block";
 
-          // Generate prompt only when image generation is enabled or if no prompt exists yet
           if (
             customPromptTextarea &&
-            (!window.apiHandler.lastGeneratedImagePrompt ||
-              enableImageGeneration)
+            referenceDescription &&
+            !customPromptTextarea.value.trim()
           ) {
+            customPromptTextarea.value = `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`;
+            window.updatePromptCharCount();
+          }
+
+          if (
+            customPromptTextarea &&
+            window.apiHandler.lastGeneratedImagePrompt
+          ) {
+            // Use the previously generated prompt
+            customPromptTextarea.value =
+              window.apiHandler.lastGeneratedImagePrompt;
+            // Update character counter
+            window.updatePromptCharCount();
+          } else if (
+            !hasReferenceImage &&
+            customPromptTextarea &&
+            !customPromptTextarea.value.trim()
+          ) {
+            // Generate prompt only if needed and no reference image was provided.
             try {
               const defaultPrompt = await window.apiHandler.generateImagePrompt(
                 this.currentCharacter.description,
@@ -464,16 +606,6 @@ class CharacterGeneratorApp {
               );
               customPromptTextarea.value = fallbackPrompt;
             }
-            // Update character counter
-            window.updatePromptCharCount();
-          } else if (
-            customPromptTextarea &&
-            window.apiHandler.lastGeneratedImagePrompt
-          ) {
-            // Use the previously generated prompt
-            customPromptTextarea.value =
-              window.apiHandler.lastGeneratedImagePrompt;
-            // Update character counter
             window.updatePromptCharCount();
           }
         }
@@ -615,6 +747,8 @@ class CharacterGeneratorApp {
         `Character card downloaded! Size: ${finalSize}`,
         "success",
       );
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
     } catch (error) {
       console.error("Download error:", error);
       this.showNotification(`Download failed: ${error.message}`, "error");
@@ -730,6 +864,9 @@ class CharacterGeneratorApp {
     // Check if user has provided a custom prompt
     const customPromptTextarea = document.getElementById("custom-image-prompt");
     const customPrompt = customPromptTextarea?.value?.trim();
+    const referenceImageDescription = document
+      .getElementById("reference-image-description")
+      ?.value?.trim();
 
     // Update character counter
     window.updatePromptCharCount();
@@ -740,11 +877,19 @@ class CharacterGeneratorApp {
       URL.revokeObjectURL(this.currentImageUrl);
     }
 
+    const imageDescriptionInput = referenceImageDescription
+      ? `${this.currentCharacter.description}\n\nReference image details:\n${referenceImageDescription}`
+      : this.currentCharacter.description;
+    const promptFromReference = referenceImageDescription
+      ? `Character portrait of ${this.currentCharacter.name || "the character"}, based on this reference description: ${referenceImageDescription}. High quality, detailed features, cinematic lighting, coherent anatomy, expressive face, fitting background.`
+      : "";
+    const effectivePrompt = customPrompt || promptFromReference || null;
+
     const imageResult = await this.imageGenerator.generateAndDisplayImage(
-      this.currentCharacter.description,
+      imageDescriptionInput,
       this.currentCharacter.name,
       imageContainer,
-      customPrompt || null,
+      effectivePrompt,
     );
 
     // Extract URL from the result object
@@ -809,7 +954,7 @@ class CharacterGeneratorApp {
     this.showNotification(`${fieldName} reset to original`, "success");
   }
 
-  handleDownloadJSON() {
+  async handleDownloadJSON() {
     if (!this.currentCharacter) {
       this.showNotification("No character to download", "warning");
       return;
@@ -855,6 +1000,8 @@ class CharacterGeneratorApp {
         "Character JSON downloaded successfully!",
         "success",
       );
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
     } catch (error) {
       console.error("Error downloading JSON:", error);
       this.showNotification("Failed to download JSON", "error");
@@ -943,6 +1090,8 @@ class CharacterGeneratorApp {
       `;
 
       this.showNotification("Image uploaded successfully!", "success");
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
     } catch (error) {
       console.error("Image upload error:", error);
       this.showNotification(`Image upload failed: ${error.message}`, "error");
@@ -1113,6 +1262,513 @@ class CharacterGeneratorApp {
     resultSection.style.display = "none";
     downloadBtn.style.display = "none";
     if (downloadJsonBtn) downloadJsonBtn.style.display = "none";
+  }
+
+  async handleReferenceImageUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      this.imageGenerator.validateImageFile(file);
+
+      const dataUrl = await this.prepareReferenceImageForVision(file);
+
+      this.referenceImageDataUrl = dataUrl;
+      this.updateReferenceImagePreview(dataUrl);
+
+      const descriptionField = document.getElementById(
+        "reference-image-description",
+      );
+      const hint = descriptionField?.value?.trim() || "";
+
+      this.showNotification("Analyzing reference image...", "info");
+      const imageDescription = await this.apiHandler.describeReferenceImage(
+        dataUrl,
+        hint,
+      );
+      if (descriptionField) {
+        descriptionField.value = imageDescription;
+      }
+      this.showNotification("Reference image description generated", "success");
+    } catch (error) {
+      console.error("Reference image handling failed:", error);
+      this.showNotification(
+        `Reference image analysis failed: ${error.message}`,
+        "warning",
+      );
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async prepareReferenceImageForVision(file) {
+    const sourceDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () =>
+        reject(new Error("Failed to read reference image file"));
+      reader.readAsDataURL(file);
+    });
+
+    // Resize/compress before sending to vision to avoid payload-too-large errors.
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Failed to process image"));
+      image.src = sourceDataUrl;
+    });
+
+    const maxSide = 1024;
+    const ratio = Math.min(maxSide / img.width, maxSide / img.height, 1);
+    const targetWidth = Math.max(1, Math.round(img.width * ratio));
+    const targetHeight = Math.max(1, Math.round(img.height * ratio));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+    return canvas.toDataURL("image/jpeg", 0.82);
+  }
+
+  updateReferenceImagePreview(dataUrl) {
+    const preview = document.getElementById("reference-image-preview");
+    if (!preview) return;
+
+    preview.style.display = "block";
+    preview.innerHTML = `<img src="${dataUrl}" alt="Reference image" style="width: 100%; display: block;" />`;
+  }
+
+  normalizeCharacterFromSpec(specData) {
+    if (specData?.data) {
+      return {
+        name: specData.data.name || "Unnamed Character",
+        description: specData.data.description || "",
+        personality: specData.data.personality || "",
+        scenario: specData.data.scenario || "",
+        firstMessage: specData.data.first_mes || "",
+      };
+    }
+
+    return {
+      name: specData.name || "Unnamed Character",
+      description: specData.description || "",
+      personality: specData.personality || "",
+      scenario: specData.scenario || "",
+      firstMessage: specData.firstMessage || specData.first_mes || "",
+    };
+  }
+
+  async handleImportCard(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      let characterData = null;
+      let importedImageUrl = "";
+
+      if (
+        file.type === "image/png" ||
+        file.name.toLowerCase().endsWith(".png")
+      ) {
+        const extracted = await this.pngEncoder.extractCharacterData(file);
+        characterData = this.normalizeCharacterFromSpec(extracted);
+        importedImageUrl = URL.createObjectURL(file);
+      } else {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        characterData = this.normalizeCharacterFromSpec(parsed);
+      }
+
+      if (!characterData) {
+        throw new Error("Unable to parse card content");
+      }
+
+      this.currentCharacter = characterData;
+      this.originalCharacter = JSON.parse(JSON.stringify(characterData));
+      this.displayCharacter();
+      this.showResultSection();
+
+      if (importedImageUrl) {
+        this.currentImageUrl = importedImageUrl;
+        const imageContainer = document.getElementById("image-content");
+        imageContainer.innerHTML = `
+          <div class="image-container">
+            <img src="${importedImageUrl}" alt="${characterData.name}" class="generated-image">
+          </div>
+        `;
+      }
+
+      document.getElementById("image-controls").style.display = "block";
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+      this.showNotification("Card imported for editing", "success");
+    } catch (error) {
+      console.error("Card import failed:", error);
+      this.showNotification(`Card import failed: ${error.message}`, "error");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async handleReviseCharacter() {
+    if (!this.currentCharacter) {
+      this.showNotification("Generate or import a character first", "warning");
+      return;
+    }
+
+    const revisionInstruction = document
+      .getElementById("revision-instruction")
+      ?.value?.trim();
+    if (!revisionInstruction) {
+      this.showNotification("Enter a revision request first", "warning");
+      return;
+    }
+
+    try {
+      const pov = document.getElementById("pov-select")?.value || "first";
+      this.showNotification("Applying AI revision...", "info");
+      const revised = await this.apiHandler.reviseCharacter(
+        this.currentCharacter,
+        revisionInstruction,
+        pov,
+      );
+      this.currentCharacter = revised;
+      this.originalCharacter = JSON.parse(JSON.stringify(revised));
+      this.displayCharacter();
+      await this.saveCardToLibrary();
+      await this.refreshLibraryViews();
+      this.showNotification("Character revised successfully", "success");
+    } catch (error) {
+      console.error("Revision failed:", error);
+      this.showNotification(`Revision failed: ${error.message}`, "error");
+    }
+  }
+
+  async savePromptToLibrary(promptData) {
+    if (!this.storageReady || !this.storage) return false;
+    try {
+      const normalized = this.preparePromptRecordForStorage(promptData);
+      const fingerprint = [
+        normalized.concept || "",
+        normalized.characterName || "",
+        normalized.pov || "",
+        normalized.referenceImageDescription || "",
+      ].join("::");
+
+      const existingPrompts = await this.storage.listPrompts();
+      const existing = existingPrompts.find(
+        (entry) => entry.fingerprint === fingerprint,
+      );
+
+      const { _trimmedFields, ...promptRecord } = normalized;
+      const fullRecord = {
+        ...promptRecord,
+        fingerprint,
+      };
+      if (Number.isInteger(existing?.id) && existing.id > 0) {
+        fullRecord.id = existing.id;
+      }
+      await this.storage.savePrompt(fullRecord);
+
+      if (_trimmedFields?.length) {
+        this.showNotification(
+          `Prompt saved. Omitted large ${_trimmedFields.join(" and ")} snapshot for storage safety.`,
+          "warning",
+        );
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to save prompt (full record):", error);
+
+      // Retry with minimal payload so prompts still persist even if optional
+      // lorebook/reference snapshots exceed storage limits.
+      try {
+        const minimal = this.preparePromptRecordForStorage(promptData, {
+          minimal: true,
+        });
+        const fingerprint = [
+          minimal.concept || "",
+          minimal.characterName || "",
+          minimal.pov || "",
+          minimal.referenceImageDescription || "",
+        ].join("::");
+
+        const existingPrompts = await this.storage.listPrompts();
+        const existing = existingPrompts.find(
+          (entry) => entry.fingerprint === fingerprint,
+        );
+
+        const { _trimmedFields, ...minimalRecord } = minimal;
+        const retryRecord = {
+          ...minimalRecord,
+          fingerprint,
+        };
+        if (Number.isInteger(existing?.id) && existing.id > 0) {
+          retryRecord.id = existing.id;
+        }
+        await this.storage.savePrompt(retryRecord);
+
+        this.showNotification(
+          "Prompt saved in compact mode (large context omitted).",
+          "warning",
+        );
+        return true;
+      } catch (retryError) {
+        console.error("Failed to save prompt (compact retry):", retryError);
+        this.updateLibraryStatus(
+          "Failed to save prompt. Check browser storage permissions.",
+        );
+        return false;
+      }
+    }
+  }
+
+  preparePromptRecordForStorage(promptData, options = {}) {
+    const minimal = Boolean(options.minimal);
+    const maxEmbeddedChars = 400000;
+
+    const safe = {
+      concept: promptData?.concept || "",
+      characterName: promptData?.characterName || "",
+      pov: promptData?.pov || "first",
+      referenceImageDescription: promptData?.referenceImageDescription || "",
+      referenceImageDataUrl: "",
+      lorebookData: null,
+      _trimmedFields: [],
+    };
+
+    if (minimal) {
+      return safe;
+    }
+
+    const referenceImageDataUrl = promptData?.referenceImageDataUrl || "";
+    if (referenceImageDataUrl) {
+      if (referenceImageDataUrl.length <= maxEmbeddedChars) {
+        safe.referenceImageDataUrl = referenceImageDataUrl;
+      } else {
+        safe._trimmedFields.push("reference-image");
+      }
+    }
+
+    if (promptData?.lorebookData) {
+      try {
+        const lorebookJson = JSON.stringify(promptData.lorebookData);
+        if (lorebookJson.length <= maxEmbeddedChars) {
+          safe.lorebookData = JSON.parse(lorebookJson);
+        } else {
+          safe._trimmedFields.push("lorebook");
+        }
+      } catch (error) {
+        safe._trimmedFields.push("lorebook");
+      }
+    }
+
+    return safe;
+  }
+
+  async saveCardToLibrary() {
+    if (!this.storageReady || !this.storage || !this.currentCharacter) return;
+
+    try {
+      let imageBlob = null;
+      if (this.currentImageUrl) {
+        try {
+          imageBlob = await this.imageGenerator.convertToBlob(
+            this.currentImageUrl,
+          );
+        } catch (error) {
+          console.warn("Skipping image blob save:", error.message);
+        }
+      }
+
+      await this.storage.saveCard({
+        characterName: this.currentCharacter.name || "Unnamed Character",
+        character: JSON.parse(JSON.stringify(this.currentCharacter)),
+        imageBlob,
+      });
+    } catch (error) {
+      console.error("Failed to save card:", error);
+    }
+  }
+
+  formatLibraryTime(isoString) {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return "Unknown time";
+    return date.toLocaleString();
+  }
+
+  async refreshLibraryViews() {
+    if (!this.storageReady || !this.storage) {
+      this.renderStorageUnavailableState();
+      return;
+    }
+
+    try {
+      const [prompts, cards] = await Promise.all([
+        this.storage.listPrompts(),
+        this.storage.listCards(),
+      ]);
+
+      const promptList = document.getElementById("stored-prompts-list");
+      const cardList = document.getElementById("stored-cards-list");
+
+      if (promptList) {
+        if (!prompts.length) {
+          promptList.innerHTML =
+            '<p class="library-empty">No saved prompts yet.</p>';
+        } else {
+          promptList.innerHTML = prompts
+            .map(
+              (prompt) => `
+                <div class="library-item">
+                  <div class="library-item-title">${prompt.characterName || "(No name)"} - ${prompt.pov || "first"} POV</div>
+                  <div class="library-item-date">${this.formatLibraryTime(prompt.updatedAt)}</div>
+                  <div class="library-item-actions">
+                    <button class="btn-small" data-action="load-prompt" data-id="${prompt.id}">Load</button>
+                    <button class="btn-small" data-action="delete-prompt" data-id="${prompt.id}">Delete</button>
+                  </div>
+                </div>
+              `,
+            )
+            .join("");
+        }
+      }
+
+      if (cardList) {
+        if (!cards.length) {
+          cardList.innerHTML =
+            '<p class="library-empty">No saved cards yet.</p>';
+        } else {
+          cardList.innerHTML = cards
+            .map(
+              (card) => `
+                <div class="library-item">
+                  <div class="library-item-title">${card.characterName || "Unnamed Character"}</div>
+                  <div class="library-item-date">${this.formatLibraryTime(card.updatedAt)}</div>
+                  <div class="library-item-actions">
+                    <button class="btn-small" data-action="load-card" data-id="${card.id}">Load</button>
+                    <button class="btn-small" data-action="delete-card" data-id="${card.id}">Delete</button>
+                  </div>
+                </div>
+              `,
+            )
+            .join("");
+        }
+      }
+
+      this.updateLibraryStatus(
+        `Saved ${prompts.length} prompt${prompts.length === 1 ? "" : "s"} and ${cards.length} card${cards.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      console.error("Failed to refresh IndexedDB library view:", error);
+      this.updateLibraryStatus("Failed to load local library.");
+    }
+  }
+
+  renderStorageUnavailableState() {
+    const promptList = document.getElementById("stored-prompts-list");
+    const cardList = document.getElementById("stored-cards-list");
+    const message =
+      '<p class="library-empty">Local storage is unavailable in this browser/session.</p>';
+
+    if (promptList) {
+      promptList.innerHTML = message;
+    }
+    if (cardList) {
+      cardList.innerHTML = message;
+    }
+  }
+
+  updateLibraryStatus(text) {
+    const status = document.getElementById("library-status");
+    if (status) {
+      status.textContent = text;
+    }
+  }
+
+  async handleLibraryPromptClick(event) {
+    const actionElement = event.target.closest("[data-action]");
+    if (!actionElement) return;
+
+    const action = actionElement.dataset.action;
+    const id = Number(actionElement.dataset.id);
+
+    try {
+      if (action === "load-prompt") {
+        const prompt = await this.storage.getPrompt(id);
+        if (!prompt) return;
+        document.getElementById("character-concept").value =
+          prompt.concept || "";
+        document.getElementById("character-name").value =
+          prompt.characterName || "";
+        document.getElementById("pov-select").value = prompt.pov || "first";
+        const refDescription = document.getElementById(
+          "reference-image-description",
+        );
+        if (refDescription) {
+          refDescription.value = prompt.referenceImageDescription || "";
+        }
+        if (prompt.referenceImageDataUrl) {
+          this.referenceImageDataUrl = prompt.referenceImageDataUrl;
+          this.updateReferenceImagePreview(prompt.referenceImageDataUrl);
+        }
+        this.lorebookData = prompt.lorebookData || null;
+        this.showNotification("Prompt loaded", "success");
+      } else if (action === "delete-prompt") {
+        await this.storage.deletePrompt(id);
+        await this.refreshLibraryViews();
+        this.showNotification("Prompt deleted", "info");
+      }
+    } catch (error) {
+      console.error("Prompt library action failed:", error);
+      this.showNotification("Prompt action failed", "error");
+    }
+  }
+
+  async handleLibraryCardClick(event) {
+    const actionElement = event.target.closest("[data-action]");
+    if (!actionElement) return;
+
+    const action = actionElement.dataset.action;
+    const id = Number(actionElement.dataset.id);
+
+    try {
+      if (action === "load-card") {
+        const card = await this.storage.getCard(id);
+        if (!card?.character) return;
+        this.currentCharacter = card.character;
+        this.originalCharacter = JSON.parse(JSON.stringify(card.character));
+        this.displayCharacter();
+        this.showResultSection();
+        document.getElementById("image-controls").style.display = "block";
+
+        if (card.imageBlob instanceof Blob) {
+          if (
+            this.currentImageUrl &&
+            this.currentImageUrl.startsWith("blob:")
+          ) {
+            URL.revokeObjectURL(this.currentImageUrl);
+          }
+          this.currentImageUrl = URL.createObjectURL(card.imageBlob);
+          const imageContainer = document.getElementById("image-content");
+          imageContainer.innerHTML = `
+            <div class="image-container">
+              <img src="${this.currentImageUrl}" alt="${card.character.name || "Character"}" class="generated-image">
+            </div>
+          `;
+        }
+        this.showNotification("Card loaded", "success");
+      } else if (action === "delete-card") {
+        await this.storage.deleteCard(id);
+        await this.refreshLibraryViews();
+        this.showNotification("Card deleted", "info");
+      }
+    } catch (error) {
+      console.error("Card library action failed:", error);
+      this.showNotification("Card action failed", "error");
+    }
   }
 
   showNotification(message, type = "info") {

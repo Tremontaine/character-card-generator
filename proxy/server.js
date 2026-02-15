@@ -21,7 +21,9 @@ app.use(
   }),
 );
 
-app.use(express.json());
+// Increase payload limits for vision requests that include base64 images.
+app.use(express.json({ limit: "12mb" }));
+app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 
 // Health check endpoint
 app.get("/health", (req, res) => {

@@ -1,125 +1,104 @@
-# SillyTavern Character Generator
+# SillyTavern Character Generator (v2)
 
 ![SillyTavern Character Generator Interface](clean.png)
 
-A web application for creating character cards for SillyTavern. It uses AI models to generate character profiles, including personalities, scenarios, and custom artwork.
+Web app for generating, editing, importing, revising, and exporting SillyTavern character cards (Spec V2).
 
-> [!IMPORTANT]
-> This application requires OpenAI-compatible API endpoints for both text and image generation. It works with OpenAI, OpenRouter, and other services that implement the OpenAI API format.
+## What Changed In v2
 
-## Core Capabilities
+- Import existing cards (`.png` with embedded data or `.json`) and edit them in-place.
+- Revise an existing card with AI using natural-language instructions.
+- Local IndexedDB library for saved prompts and cards (load/delete from UI).
+- Reference image flow with optional vision-based auto-description.
+- Streaming generation output with stop support.
+- Better API key handling: session-only by default, optional persistent storage toggle.
 
-### Character Synthesis
-The generator uses AI to create character profiles based on user input. It generates backstories, personality traits, and opening scenarios. The application supports streaming output, displaying the character generation in real-time.
+## Features
 
-### Image Generation
-The application includes an image generation feature that creates prompts based on the character's description. The tool automatically optimizes prompts for the selected image generation model.
-
-**Image Generation Controls:**
--   **Toggle Image Generation**: Enable or disable automatic image generation during character creation to manage API costs.
--   **Regenerate Image Prompt**: Generate a new optimized prompt based on the character description without creating an image.
--   **Regenerate Image**: Create a new image using the current prompt.
--   **Editable Prompts**: Manually edit image prompts (up to 1000 characters).
--   **Upload Images**: Use custom artwork by uploading PNG or JPEG files.
-
-### Lore Integration
-The generator supports SillyTavern World Info files. This allows generated characters to incorporate specific world lore, ensuring consistency with custom settings.
-
-> [!NOTE]
-> World Info files are used only during character generation to provide context to the AI. They are not embedded in the exported character cards.
-
-## Customization & Control
-
-Generated fields are editable, allowing for manual adjustments.
-
--   **Perspectives**: Supports first-person ("I am") and third-person ("She is") narration styles.
--   **Resets**: Individual fields can be reset to regenerate specific sections.
--   **Persistence**: API settings and preferences are saved locally in the browser.
-
-## Generated Example
-
-Below is an example of a generated character card.
-
-![Generated Character Example](generated.png)
+- AI character generation (first-person or third-person POV templates).
+- Optional lorebook (SillyTavern World Info JSON) grounding during generation.
+- AI image prompt generation with editable prompt box (up to 1000 chars).
+- Image controls: regenerate prompt, regenerate image, or upload your own image.
+- Export to:
+  - SillyTavern PNG card with embedded `chara_card_v2` metadata
+  - JSON (`chara_card_v2` structure)
+- Per-field reset buttons for reverting edits to the last generated/imported baseline.
 
 ## Requirements
 
-The application requires Node.js (LTS version recommended).
-
-### Installing Node.js
-
--   **Windows**: Use [Scoop](https://scoop.sh/) to install Node.js LTS:
-    ```bash
-    scoop install nodejs-lts
-    ```
--   **Linux**: Use your distribution's package manager (e.g., `apt`, `dnf`, `pacman`).
--   **macOS**: Use [Homebrew](https://brew.sh/):
-    ```bash
-    brew install node
-    ```
+- Node.js 18+ recommended
+- OpenAI-compatible text API endpoint (required)
+- OpenAI-compatible image API endpoint (optional)
+- Vision-capable text model (optional, only needed for reference-image auto-description)
 
 ## Quick Start
 
-### Docker Compose (Recommended)
+### Local (Dev)
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/Tremontaine/character-card-generator
-    cd character-card-generator
-    ```
+```bash
+npm install
+cd proxy && npm install && cd ..
+npm run dev
+```
 
-2.  **Start the application**:
-    ```bash
-    docker-compose up -d
-    ```
+- Frontend: `http://localhost:2427`
+- Proxy API: `http://localhost:2426`
 
-3.  **Access the interface**:
-    -   Frontend: http://localhost:2427
-    -   Backend API: http://localhost:2426
+### Local (Non-dev)
 
-### Direct Installation
+```bash
+npm start
+```
 
-1.  **Install dependencies**:
-    ```bash
-    npm install
-    cd proxy && npm install
-    cd ..
-    ```
+### Docker Compose
 
-2.  **Start the development server**:
-    ```bash
-    npm run dev
-    ```
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
 
-## Usage Guide
-
-1.  **Configure APIs**: Open "API Settings" to enter Text (OpenAI, OpenRouter) and Image API credentials.
-2.  **Define Concept**: Enter a description of the character.
-3.  **Generate**: Click "Generate Character".
-4.  **Refine**: Edit text fields or regenerate images as needed.
-5.  **Export**: Download the character as a SillyTavern-compatible PNG card or a JSON file.
+- Frontend: `http://localhost:${FRONTEND_PORT:-2427}`
+- Proxy health: `http://localhost:${PROXY_PORT:-2426}/health`
 
 ## Configuration
 
-The application is configured via the `.env` file.
+Environment (`.env`):
 
 | Variable | Default | Description |
-| :--- | :--- | :--- |
-| `FRONTEND_PORT` | `2427` | Port for the web interface |
-| `PROXY_PORT` | `2426` | Port for the backend proxy |
+| --- | --- | --- |
+| `FRONTEND_PORT` | `2427` | Host port mapped to frontend container |
+| `PROXY_PORT` | `2426` | Host port for proxy server |
+| `FRONTEND_URL` | `http://localhost:2427` | Used by proxy CORS/OpenRouter headers |
 
-## Planned Features
+In-app API Settings:
 
-The following features are planned for future releases:
+- Text API Base URL, API Key, Text Model, optional Vision Model
+- Image API Base URL, API Key, Image Model, optional size
+- `Persist API keys` toggle (off by default)
+- `Enable image generation` toggle
 
--   **IndexedDB Card Storage**: Local storage for generated character cards with browsing and management capabilities.
--   **Card Editing**: Request AI-powered revisions for generated cards.
--   **Card Import for Editing**: Upload existing character cards to modify them.
+## Usage
+
+1. Open API settings and configure text API (required).
+2. Enter a character concept (and optional fixed name).
+3. Optionally upload a lorebook JSON.
+4. Optionally upload a reference image (auto-described if vision model is configured).
+5. Generate character.
+6. Edit fields, revise with AI, or import/export as needed.
+
+## API Compatibility Notes
+
+- The frontend calls only the local proxy (`/api/...`).
+- The proxy forwards to your configured upstream API URL.
+- Proxy tries `Authorization: Bearer ...` first, then retries with `X-API-Key` on 401.
+
+## Project Structure
+
+- `index.html` - UI shell
+- `src/scripts/` - frontend logic (generation, API calls, image handling, storage)
+- `proxy/server.js` - Express proxy for text/image endpoints and image passthrough
+- `src/scripts/storage.js` - IndexedDB prompt/card library
 
 ## License
 
-MIT License - See `LICENSE` file for details.
-
-***
-
-*Note: This application requires active API credentials for text and image generation.*
+MIT. See `LICENSE`.

@@ -400,6 +400,51 @@ textarea.content-box {
     animation: spin 900ms linear infinite;
 }
 
+/* Example Messages Section */
+.example-messages-section {
+    background: linear-gradient(
+        160deg,
+        rgba(139, 92, 246, 0.05) 0%,
+        rgba(59, 130, 246, 0.05) 100%
+    );
+    border: 1px solid rgba(139, 92, 246, 0.15);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-top: 1.5rem;
+}
+
+#example-messages-output {
+    background: var(--surface-color);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow-y: auto;
+    color: var(--text-color);
+}
+
+#example-messages-output::-webkit-scrollbar {
+    width: 6px;
+}
+
+#example-messages-output::-webkit-scrollbar-track {
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 3px;
+}
+
+#example-messages-output::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 3px;
+}
+
+#example-messages-output::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.5);
+}
+
 @keyframes spin {
     to {
         transform: rotate(360deg);

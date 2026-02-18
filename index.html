@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>SillyTavern Character Generator</title>
         <link rel="icon" type="image/png" href="favicon.png" />
-        <link rel="stylesheet" href="src/styles/main.css?v=20260215-ui2" />
+        <link rel="stylesheet" href="src/styles/main.css?v=20260218-ex1" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -468,6 +468,123 @@
                                     placeholder="Character first message will appear here..."
                                 ></textarea>
                             </div>
+
+                            <!-- Example Messages Generator Section -->
+                            <div
+                                class="character-field example-messages-section"
+                                style="margin-bottom: 1.5rem"
+                            >
+                                <div
+                                    style="
+                                        display: flex;
+                                        justify-content: space-between;
+                                        align-items: center;
+                                        margin-bottom: 0.5rem;
+                                    "
+                                >
+                                    <h3
+                                        style="
+                                            margin: 0;
+                                            font-size: 1.1rem;
+                                            font-weight: 600;
+                                        "
+                                    >
+                                        Example Messages
+                                    </h3>
+                                </div>
+                                <p
+                                    style="
+                                        font-size: 0.8rem;
+                                        color: var(--text-secondary);
+                                        margin-bottom: 0.75rem;
+                                    "
+                                >
+                                    💡 Generate example dialogue for manual
+                                    import into SillyTavern's "Example Messages"
+                                    field. These are NOT included in the
+                                    downloaded card.
+                                </p>
+                                <div
+                                    style="
+                                        display: flex;
+                                        gap: 0.75rem;
+                                        align-items: center;
+                                        margin-bottom: 0.75rem;
+                                        flex-wrap: wrap;
+                                    "
+                                >
+                                    <div
+                                        style="
+                                            display: flex;
+                                            align-items: center;
+                                            gap: 0.5rem;
+                                        "
+                                    >
+                                        <label
+                                            for="example-messages-count"
+                                            style="
+                                                font-size: 0.875rem;
+                                                color: var(--text-secondary);
+                                            "
+                                        >
+                                            Count:
+                                        </label>
+                                        <select
+                                            id="example-messages-count"
+                                            class="input"
+                                            style="
+                                                width: auto;
+                                                min-width: 70px;
+                                                height: 2.25rem;
+                                                padding: 0.25rem 0.5rem;
+                                            "
+                                        >
+                                            <option value="1">1</option>
+                                            <option value="2">2</option>
+                                            <option value="3" selected>
+                                                3
+                                            </option>
+                                            <option value="4">4</option>
+                                            <option value="5">5</option>
+                                        </select>
+                                    </div>
+                                    <button
+                                        id="generate-examples-btn"
+                                        class="btn-small"
+                                        style="padding: 0.4rem 0.8rem"
+                                    >
+                                        ✨ Generate Examples
+                                    </button>
+                                    <button
+                                        id="copy-examples-btn"
+                                        class="btn-small"
+                                        style="
+                                            display: none;
+                                            padding: 0.4rem 0.8rem;
+                                        "
+                                    >
+                                        📋 Copy to Clipboard
+                                    </button>
+                                </div>
+                                <div
+                                    id="example-messages-output"
+                                    style="
+                                        display: none;
+                                        background: var(--surface-color);
+                                        border: 1px solid
+                                            rgba(139, 92, 246, 0.2);
+                                        border-radius: 0.5rem;
+                                        padding: 1rem;
+                                        font-family:
+                                            &quot;IBM Plex Mono&quot;, monospace;
+                                        font-size: 0.875rem;
+                                        line-height: 1.7;
+                                        white-space: pre-wrap;
+                                        max-height: 400px;
+                                        overflow-y: auto;
+                                    "
+                                ></div>
+                            </div>
                         </div>
 
                         <div class="image-preview">
@@ -910,6 +1027,6 @@
             </div>
         </div>
 
-        <script src="src/scripts/main.js?v=20260215-fix1"></script>
+        <script src="src/scripts/main.js?v=20260218-ex1"></script>
     </body>
 </html>

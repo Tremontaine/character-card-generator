@@ -1052,6 +1052,79 @@ BEGIN IMAGE PROMPT NOW:`;
     };
   }
 
+  async generateExampleMessages(character, count = 3, pov = "first") {
+    if (!character) {
+      throw new Error("Character is required for example message generation");
+    }
+
+    const model = this.config.get("api.text.model");
+    const povText = pov === "third" ? "third-person" : "first-person";
+    const charName = character.name || "{{char}}";
+
+    const systemPrompt = `You are an expert at writing example dialogue messages for roleplay characters. These examples help define how a character speaks and behaves. Write in ${povText} perspective for the character.
+
+Your task: Generate ${count} example dialogue message(s) for the character. Each example should:
+1. Be a ONE-LINER - a single line of dialogue with minimal prose/action if needed
+2. Show the character's unique voice, speech patterns, and personality
+3. Include {{char}}'s spoken dialogue, optionally with brief action/description
+4. Vary the tone and context across examples (casual, emotional, confrontational, playful, etc.)
+5. Use proper formatting with <START> tags as separators
+
+Format your response EXACTLY like this:
+<START>
+{{char}}: [dialogue with optional brief action]
+<START>
+{{char}}: [different dialogue showing another aspect of personality]
+<START>
+{{char}}: [yet another dialogue example]
+
+IMPORTANT:
+- Each example must be a SINGLE line of dialogue, not multiple paragraphs
+- Include brief prose/action tags only when necessary to convey context
+- Keep the character's name as {{char}} in the output
+- Do NOT include any explanations, headers, or additional text - ONLY the formatted examples
+- Generate exactly ${count} example(s)`;
+
+    const userPrompt = `Character Name: ${charName}
+
+Character Description:
+${character.description || "No description provided"}
+
+Character Personality:
+${character.personality || "No personality provided"}
+
+First Message (for reference on voice/style):
+${character.firstMessage || "No first message provided"}
+
+Generate ${count} example dialogue message(s) for this character. Remember: one-liners, varied contexts, ${povText} perspective.`;
+
+    const data = {
+      model,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+      temperature: 0.8,
+      max_tokens: 1024,
+      stream: false,
+    };
+
+    const response = await this.makeRequest(
+      "/chat/completions",
+      data,
+      false,
+      false,
+    );
+    const output = this.processNormalResponse(response);
+    return output.trim();
+  }
+
   async describeReferenceImage(imageDataUrl, manualHint = "") {
     if (!imageDataUrl) {
       throw new Error("Reference image is required");

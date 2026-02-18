@@ -323,6 +323,24 @@ class CharacterGeneratorApp {
         this.handleLibraryCardClick(event),
       );
     }
+
+    // Example messages generator buttons
+    const generateExamplesBtn = document.getElementById(
+      "generate-examples-btn",
+    );
+    const copyExamplesBtn = document.getElementById("copy-examples-btn");
+
+    if (generateExamplesBtn) {
+      generateExamplesBtn.addEventListener("click", () =>
+        this.handleGenerateExampleMessages(),
+      );
+    }
+
+    if (copyExamplesBtn) {
+      copyExamplesBtn.addEventListener("click", () =>
+        this.handleCopyExampleMessages(),
+      );
+    }
   }
 
   async checkAPIStatus() {
@@ -1230,6 +1248,19 @@ class CharacterGeneratorApp {
     if (resetScenarioBtn) resetScenarioBtn.style.display = "none";
     if (resetFirstMessageBtn) resetFirstMessageBtn.style.display = "none";
 
+    // Reset example messages section for new character
+    const exampleMessagesOutput = document.getElementById(
+      "example-messages-output",
+    );
+    const copyExamplesBtn = document.getElementById("copy-examples-btn");
+    if (exampleMessagesOutput) {
+      exampleMessagesOutput.textContent = "";
+      exampleMessagesOutput.style.display = "none";
+    }
+    if (copyExamplesBtn) {
+      copyExamplesBtn.style.display = "none";
+    }
+
     // Show JSON download button whenever character data is available
     const downloadJsonBtn = document.getElementById("download-json-btn");
     if (downloadJsonBtn) {
@@ -1443,6 +1474,63 @@ class CharacterGeneratorApp {
     } catch (error) {
       console.error("Revision failed:", error);
       this.showNotification(`Revision failed: ${error.message}`, "error");
+    }
+  }
+
+  async handleGenerateExampleMessages() {
+    if (!this.currentCharacter) {
+      this.showNotification("Generate or import a character first", "warning");
+      return;
+    }
+
+    const count = parseInt(
+      document.getElementById("example-messages-count")?.value || "3",
+      10,
+    );
+    const generateBtn = document.getElementById("generate-examples-btn");
+    const copyBtn = document.getElementById("copy-examples-btn");
+    const outputDiv = document.getElementById("example-messages-output");
+
+    try {
+      generateBtn.disabled = true;
+      generateBtn.textContent = "⏳ Generating...";
+      this.showNotification("Generating example messages...", "info");
+
+      const pov = document.getElementById("pov-select")?.value || "first";
+      const examples = await this.apiHandler.generateExampleMessages(
+        this.currentCharacter,
+        count,
+        pov,
+      );
+
+      outputDiv.textContent = examples;
+      outputDiv.style.display = "block";
+      copyBtn.style.display = "inline-block";
+      this.showNotification(`Generated ${count} example message(s)`, "success");
+    } catch (error) {
+      console.error("Example generation failed:", error);
+      this.showNotification(`Generation failed: ${error.message}`, "error");
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = "✨ Generate Examples";
+    }
+  }
+
+  async handleCopyExampleMessages() {
+    const outputDiv = document.getElementById("example-messages-output");
+    const text = outputDiv?.textContent;
+
+    if (!text) {
+      this.showNotification("No examples to copy", "warning");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      this.showNotification("Copied to clipboard!", "success");
+    } catch (error) {
+      console.error("Copy failed:", error);
+      this.showNotification("Failed to copy to clipboard", "error");
     }
   }
 

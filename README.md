@@ -9,6 +9,7 @@ Web app for generating, editing, importing, revising, and exporting SillyTavern 
 
 - Import existing cards (`.png` with embedded data or `.json`) and edit them in-place.
 - Revise an existing card with AI using natural-language instructions.
+- Example Messages Generator - create dialogue examples for manual import into SillyTavern.
 - Local IndexedDB library for saved prompts and cards (load/delete from UI).
 - Reference image flow with optional vision-based auto-description.
 - Streaming generation output with stop support.
@@ -20,6 +21,12 @@ Web app for generating, editing, importing, revising, and exporting SillyTavern 
 - Optional lorebook (SillyTavern World Info JSON) grounding during generation.
 - AI image prompt generation with editable prompt box (up to 1000 chars).
 - Image controls: regenerate prompt, regenerate image, or upload your own image.
+- Example Messages Generator:
+  - Generate one-liner dialogue examples in SillyTavern format (`<START>` tags)
+  - Adjustable count (1-5 examples)
+  - Works with both generated and imported cards
+  - Not included in downloaded cards - for manual import only
+  - Copy to clipboard for easy pasting into SillyTavern
 - Export to:
   - SillyTavern PNG card with embedded `chara_card_v2` metadata
   - JSON (`chara_card_v2` structure)
@@ -86,6 +93,7 @@ In-app API Settings:
 4. Optionally upload a reference image (auto-described if vision model is configured).
 5. Generate character.
 6. Edit fields, revise with AI, or import/export as needed.
+7. Optionally generate Example Messages for manual import into SillyTavern's "Example Messages" field.
 
 ## API Compatibility Notes
 
